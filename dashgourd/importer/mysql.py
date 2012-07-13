@@ -28,7 +28,7 @@ class MysqlImporter(object):
     
     Make sure one field is named `_id`.
     
-    `_actions` is reserved for user actions
+    `actions` is reserved for user actions
     
     Note that users are not inserted in batch. 
     They are inserted one at a time.
@@ -53,19 +53,21 @@ class MysqlImporter(object):
     """Imports actions into DashGourd
     
     The data will be inserted into the embedded document list named
-    `_actions`.
+    `actions`.
     
-    The data must include the following fields `_id`, `_type`, `_created_at`.
+    The data must include the following fields `_id`, `name`, `created_at`.
     If the data does not contain those fields, then the api will fail silently
     and not insert that row.
     
     Args:
-        _type: Slug for action type
+        name: Action name
         query: MySQL query to run
     """
     
-    def import_actions(self, _type, query):
+    def import_actions(self, name, query):
         
+        self.api.register_action(name)
+                    
         if self.mysql_conn.open:
             cursor = self.mysql_conn.cursor(MySQLdb.cursors.DictCursor)
             cursor.execute(query)
@@ -73,7 +75,7 @@ class MysqlImporter(object):
             
             for i in range(numrows):        
                 data = cursor.fetchone()
-                data['_type'] = _type
+                data['name'] = name
                 self.api.insert_action(data)
             
             cursor.close() 
@@ -131,12 +133,12 @@ class MysqlImportHelper(object):
     """Wrapper for MysqlImporter.import_actions
     
     Args:
-        _type: Action slug
+        name: Action name
         query: Query used to import actions
     """
             
-    def import_actions(self, _type, query):
-        self.importer.import_actions( _type, query) 
+    def import_actions(self, name, query):
+        self.importer.import_actions( name, query) 
         
     """Wrapper for MysqlImporter.close
     """    
