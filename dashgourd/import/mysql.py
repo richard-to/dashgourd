@@ -43,17 +43,18 @@ class MysqlImport(object):
             
             for i in range(numrows):
                 data = cursor.fetchone()
-                if data['_id'] is not None and data['_events'] is None:
-                    self.api.create_user(data)
+                self.api.create_user(data)
                             
             cursor.close()        
     
     """Imports events into DashGourd
     
-    The data will be inserted into the embedded document named
+    The data will be inserted into the embedded document list named
     `_events`.
     
     The data must include the following fields `_id`, `_type`, `_created_at`.
+    If the data does not contain those fields, then the api will fail silently
+    and not insert that row.
     
     Args:
         query: MySQL query to run
@@ -68,10 +69,8 @@ class MysqlImport(object):
             
             for i in range(numrows):        
                 data = cursor.fetchone()
-                if (data['_id'] is not None and 
-                    data['_type'] is not None and
-                    data['_created_at'] is not None):
-                    self.api.insert_event(data)
+                self.api.insert_event(data)
+            
             cursor.close() 
 
     """Closes MySQL connection
