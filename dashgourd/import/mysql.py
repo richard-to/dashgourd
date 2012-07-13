@@ -11,45 +11,74 @@ class MysqlImport(object):
     
     Attributes:
         mysql_conn: MySQLdb connection
-        api: DashGourd api object
+        api: DashGourd api object  
     """
      
     def __init__(self, mysql_conn, api):
         self.mysql_conn = mysql_conn
         self.api = api
-    
-    
+     
     """Imports users into DashGourd.
     
     The data will be inserted as is into the user collection.
     This method inserts new users and does not update them.
     
-    Make sure one field is named _id.
+    Make sure one field is named `_id`.
     
-    "events" is reserved for user events
+    `_events` is reserved for user events
     
     Note that users are not inserted in batch. 
     They are inserted one at a time.
     
-    Attributes:
+    Args:
         query: MySQL query to run
     """
         
     def import_users(self, query):
-        cursor = self.mysql_conn.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute(query)
-        numrows = int(cursor.rowcount)
         
-        for i in range(numrows):
-            data = cursor.fetchone()
-            if data['_id'] is not None and data['events'] is None:
-                self.api.create_user(data)
-                        
-        cursor.close()        
+        if self.mysql_conn.open:        
+            cursor = self.mysql_conn.cursor(MySQLdb.cursors.DictCursor)
+            cursor.execute(query)
+            numrows = int(cursor.rowcount)
+            
+            for i in range(numrows):
+                data = cursor.fetchone()
+                if data['_id'] is not None and data['_events'] is None:
+                    self.api.create_user(data)
+                            
+            cursor.close()        
+    
+    """Imports events into DashGourd
+    
+    The data will be inserted into the embedded document named
+    `_events`.
+    
+    The data must include the following fields `_id`, `_type`, `_created_at`.
+    
+    Args:
+        query: MySQL query to run
+    """
     
     def import_events(self, query):
-       print events 
+        
+        if self.mysql_conn.open:
+            cursor = self.mysql_conn.cursor(MySQLdb.cursors.DictCursor)
+            cursor.execute(query)
+            numrows = int(cursor.rowcount)
+            
+            for i in range(numrows):        
+                data = cursor.fetchone()
+                if (data['_id'] is not None and 
+                    data['_type'] is not None and
+                    data['_created_at'] is not None):
+                    self.api.insert_event(data)
+            cursor.close() 
 
-
+    """Closes MySQL connection
     
+    When the connection is closed, the import methods
+    will fail silently for now.
+    """    
     def close(self):
+        self.mysql_conn.close()
+        
