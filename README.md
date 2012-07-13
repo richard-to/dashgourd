@@ -1,3 +1,3 @@
 # DashGourd
 
-Another experiment that improves on StatSquash
+An experiment that improves on the mistakes in StatSquash approach.

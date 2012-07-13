@@ -1,6 +1,6 @@
 import os
 import MySQLdb
-from api.actions import ActionsApi
+from dashgourd.api.actions import ActionsApi
 from pymongo import Connection
 
 class MysqlImporter(object):
@@ -62,10 +62,9 @@ class MysqlImporter(object):
     Args:
         _type: Slug for action type
         query: MySQL query to run
-        _label: Readable label is optional. If none provided, _type will be used
     """
     
-    def import_actions(self, _type, query, _label=None):
+    def import_actions(self, _type, query):
         
         if self.mysql_conn.open:
             cursor = self.mysql_conn.cursor(MySQLdb.cursors.DictCursor)
@@ -75,7 +74,6 @@ class MysqlImporter(object):
             for i in range(numrows):        
                 data = cursor.fetchone()
                 data['_type'] = _type
-                data['_label'] = _label
                 self.api.insert_action(data)
             
             cursor.close() 
@@ -135,11 +133,10 @@ class MysqlImportHelper(object):
     Args:
         _type: Action slug
         query: Query used to import actions
-        _label: Label for action (optional)
     """
             
-    def import_actions(self, _type, query, _label=None):
-        self.importer.import_actions( _type, query, _label) 
+    def import_actions(self, _type, query):
+        self.importer.import_actions( _type, query) 
         
     """Wrapper for MysqlImporter.close
     """    

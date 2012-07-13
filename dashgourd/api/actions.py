@@ -24,8 +24,8 @@ class ActionsApi(object):
     
     def create_user(self, data):
 
-        if data['_id'] is not None:
-            if data['_actions'] is not None:
+        if '_id' in data:
+            if '_actions' in data:
                 del data['_actions']
             self.db.users.insert(data)
     
@@ -53,19 +53,14 @@ class ActionsApi(object):
             
     def insert_action(self, data):
         
-        if (data['_id'] is not None and 
-            data['_type'] is not None and
-            data['_created_at'] is not None):
+        if ('_id' in data and 
+            '_type' in data and 
+            '_created_at' in data):
             
             _id = data['_id']
             del data['_id']
             
-            _label = None
-            if data['_label'] is not None:
-                _label = data['_label']
-            del data['_label']
-            
-            self.recognize_action(data['_type'], _label)
+            self.recognize_action(data['_type'])
             self.db.users.update({ '_id':_id }, { '$push': { '_actions': data } })
     
     """Creates or logs an action type into the actions collection.
