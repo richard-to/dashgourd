@@ -31,6 +31,9 @@ class ChartsApi(object):
         Args:
             collection: Name of chart
         
+        Returns: 
+            PyMongo cursor of collection
+            
         TODO(richard-to): Check if valid chart collection
         TODO(richard-to): Allow different export formats, such as csv
         """  

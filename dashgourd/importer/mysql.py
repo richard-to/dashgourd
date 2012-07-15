@@ -1,6 +1,7 @@
 import os
 import MySQLdb
 from dashgourd.api.actions import ActionsApi
+from dashgourd.api.helper import get_mongodb_db
 from pymongo import Connection
 
 class MysqlImporter(object):
@@ -86,8 +87,7 @@ class MysqlImporter(object):
         """
         
         self.mysql_conn.close()
- 
- 
+
 class MysqlImportHelper(object):
     """Boilerplate wrapper for MysqlImporter
      
@@ -99,23 +99,9 @@ class MysqlImportHelper(object):
     """
     
     def __init__(self):
-        connection = Connection(
-            os.environ.get('MONGO_HOST', 'localhost'), 
-            os.environ.get('MONGO_PORT', 27017))
-        mongo_db = connection[os.environ.get('MONGO_DB')]
-        
-        mongo_user = os.environ.get('MONGO_USER')
-        mongo_pass = os.environ.get('MONGO_PASS')
-        
-        if mongo_user is not None and mongo_pass is not None:
-            mongo_db.authenticate()
-            
-        conn = MySQLdb.connect(
-            user=os.environ.get('MYSQL_USER'),
-            passwd= os.environ.get('MYSQL_PASS'),
-            db= os.environ.get('MYSQL_DB'),    
-            host= os.environ.get('MYSQL_HOST', 'localhost'),
-            port= os.environ.get('MYSQL_PORT', 3307))        
+
+        mongo_db = get_mongodb_db()            
+        conn = get_mysql_conn()        
         
         api = ActionsApi(mongo_db)
         self.importer = MysqlImporter(conn, api)

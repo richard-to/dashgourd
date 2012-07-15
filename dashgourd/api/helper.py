@@ -3,6 +3,31 @@ from pymongo import Connection
 from actions import ActionsApi
 from charts import ChartsApi
 
+def get_mongodb_db():
+    """ Gets connected mongodb db.
+    
+    Uses os environment variables to connect to mongo db 
+    and get db used for dashgourd.
+    
+    Mainly a shortcut and is optional.
+    
+    Returns:
+        mongo_db: Db used for dashgourd
+    """
+    
+    connection = Connection(
+        os.environ.get('MONGO_HOST', 'localhost'), 
+        os.environ.get('MONGO_PORT', 27017))
+    mongo_db = connection[os.environ.get('MONGO_DB')]
+    
+    mongo_user = os.environ.get('MONGO_USER')
+    mongo_pass = os.environ.get('MONGO_PASS')
+    
+    if mongo_user is not None and mongo_pass is not None:
+        mongo_db.authenticate()
+    
+    return mongo_db
+
 class HelperApi(object):
     """Helper function for initializing pymongo connection.
     
@@ -11,22 +36,11 @@ class HelperApi(object):
     variables.
     
     Api classes can be instantiated without this helper.
-    
     """
     
     def __init__(self):
-        connection = Connection(
-            os.environ.get('MONGO_HOST', 'localhost'), 
-            os.environ.get('MONGO_PORT', 27017))
-        mongo_db = connection[os.environ.get('MONGO_DB')]
-        
-        mongo_user = os.environ.get('MONGO_USER')
-        mongo_pass = os.environ.get('MONGO_PASS')
-        
-        if mongo_user is not None and mongo_pass is not None:
-            mongo_db.authenticate()
-        
-        self.db = mongo_db
+
+        self.db = get_mongodb_db()
         
         self.apis = {
             'actions': ActionsApi,
