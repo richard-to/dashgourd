@@ -95,7 +95,7 @@ class MysqlImportHelper(object):
     Provides boiler plate db initialization via 
     environment variables.
      
-    Now all you need to provide is the query. Not too
+    Just need to provide the query with the helper. Not too
     flexible, but I don't need much more for importing.            
     """
     
