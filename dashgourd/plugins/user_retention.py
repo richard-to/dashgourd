@@ -1,6 +1,6 @@
 from bson.code import Code
 
-def create_user_retention(db, collection, query, group, action):
+def create_user_retention(db, collection, options):
     """Creates user retention cohort
     
     Creates user retention cohort charts. 
@@ -11,7 +11,8 @@ def create_user_retention(db, collection, query, group, action):
     Also group currently accepts top level user fields, so no events.
     
     Currently only computes monthly groupings. Weekly is trickier and
-    is not implemented yet.
+    is not implemented yet. May be as simple as using getDay() on date 
+    object and subtracting difference from 0 from getDate().
     
     Currently can only specify one action, but it should be 
     possible to specify more in the future.
@@ -19,9 +20,10 @@ def create_user_retention(db, collection, query, group, action):
     Args:
         db: PyMongo db instance
         collection: Name of collection to create
-        query: Mongo db query to select rows to operate on
-        group: List of dicts to define how data is grouped
-        action: Name of action to track for that month.
+        options: Dict with query, group and calc fields        
+            query: Mongo db query to select rows to operate on
+            group: List of dicts to define how data is grouped
+            action: Name of action to track for that month.
     
     Example:
     
@@ -32,8 +34,18 @@ def create_user_retention(db, collection, query, group, action):
     ]
     
     action = 'signedin'
-    """
     
+    TODO(richard-to): Error check options more thoroughly
+    TODO(richard-to): Added weekly interval
+    """
+
+    query = options.get('query')
+    group = options.get('group')
+    action = options.get('action')
+    
+    if query is None or group is None or action is None:
+        return False
+        
     mapper_template = """
     function(){{
 

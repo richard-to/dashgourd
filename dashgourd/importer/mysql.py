@@ -20,25 +20,24 @@ class MysqlImporter(object):
     def __init__(self, mysql_conn, api):
         self.mysql_conn = mysql_conn
         self.api = api
-     
-    """Imports users into DashGourd.
-    
-    The data will be inserted as is into the user collection.
-    This method inserts new users and does not update them.
-    
-    Make sure one field is named `_id`.
-    
-    `actions` is reserved for user actions
-    
-    Note that users are not inserted in batch. 
-    They are inserted one at a time.
-    
-    Args:
-        query: MySQL query to run
-    """
-        
+             
     def import_users(self, query):
+        """Imports users into DashGourd.
         
+        The data will be inserted as is into the user collection.
+        This method inserts new users and does not update them.
+        
+        Make sure one field is named `_id`.
+        
+        `actions` is reserved for user actions
+        
+        Note that users are not inserted in batch. 
+        They are inserted one at a time.
+        
+        Args:
+            query: MySQL query to run
+        """
+            
         if self.mysql_conn.open:        
             cursor = self.mysql_conn.cursor(MySQLdb.cursors.DictCursor)
             cursor.execute(query)
@@ -49,23 +48,22 @@ class MysqlImporter(object):
                 self.api.create_user(data)
                             
             cursor.close()        
-    
-    """Imports actions into DashGourd
-    
-    The data will be inserted into the embedded document list named
-    `actions`.
-    
-    The data must include the following fields `_id`, `name`, `created_at`.
-    If the data does not contain those fields, then the api will fail silently
-    and not insert that row.
-    
-    Args:
-        name: Action name
-        query: MySQL query to run
-    """
-    
-    def import_actions(self, name, query):
         
+    def import_actions(self, name, query):
+        """Imports actions into DashGourd
+        
+        The data will be inserted into the embedded document list named
+        `actions`.
+        
+        The data must include the following fields `_id`, `name`, `created_at`.
+        If the data does not contain those fields, then the api will fail silently
+        and not insert that row.
+        
+        Args:
+            name: Action name
+            query: MySQL query to run
+        """
+                
         self.api.register_action(name)
                     
         if self.mysql_conn.open:
@@ -79,13 +77,14 @@ class MysqlImporter(object):
                 self.api.insert_action(data)
             
             cursor.close() 
-
-    """Closes MySQL connection
-    
-    When the connection is closed, the import methods
-    will fail silently for now.
-    """    
+ 
     def close(self):
+        """Closes MySQL connection
+        
+        When the connection is closed, the import methods
+        will fail silently for now.
+        """
+        
         self.mysql_conn.close()
  
  
@@ -120,27 +119,25 @@ class MysqlImportHelper(object):
         
         api = ActionsApi(mongo_db)
         self.importer = MysqlImporter(conn, api)
-    
-    """Wrapper for MysqlImporter.import_users
-    
-    Args:
-        query: Query used to import users
-    """
-    
+        
     def import_users(self, query):
+        """Wrapper for MysqlImporter.import_users
+        
+        Args:
+            query: Query used to import users
+        """
+            
         self.importer.import_users(query)
-
-    """Wrapper for MysqlImporter.import_actions
-    
-    Args:
-        name: Action name
-        query: Query used to import actions
-    """
             
     def import_actions(self, name, query):
-        self.importer.import_actions( name, query) 
+        """Wrapper for MysqlImporter.import_actions
+    
+        Args:
+            name: Action name
+            query: Query used to import actions
+        """
         
-    """Wrapper for MysqlImporter.close
-    """    
+        self.importer.import_actions( name, query) 
+           
     def close(self):
         self.importer.close()               

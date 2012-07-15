@@ -1,6 +1,6 @@
 from bson.code import Code
 
-def create_cohort_funnel(db, collection, query, group, calc):
+def create_cohort_funnel(db, collection, options):
     """Creates data for cohort funnels or plain funnels
     
     Creates collection of calculated data for cohort funnels using
@@ -13,9 +13,10 @@ def create_cohort_funnel(db, collection, query, group, calc):
     Args:
         db: PyMongo db instance
         collection: Name of collection to create
-        query: Mongo db query to select rows to operate on
-        group: List of dicts to define how data is grouped
-        calc: List of dicts to define how to calculate data
+        options: Dict with query, group and calc fields
+            query: Mongo db query to select rows to operate on
+            group: List of dicts to define how data is grouped
+            calc: List of dicts to define how to calculate data
     
     Example:
     
@@ -31,8 +32,18 @@ def create_cohort_funnel(db, collection, query, group, calc):
         {"type":"avg", "action":"bought_song"},
         {"type":"pct", "action":"bought_song"},
         {"type":"avg", "action":"listened_song", "meta": "time", "by":"listened_song"}    
-    ]    
+    ]
+    
+    TODO(richard-to): Error check options more thoroughly
+    TODO(richard-to): Added weekly interval
     """
+    
+    query = options.get('query')
+    group = options.get('group')
+    calc = options.get('calc')
+    
+    if query is None or group is None or calc is None:
+        return False
     
     mapper_template = """ 
     function() {{
