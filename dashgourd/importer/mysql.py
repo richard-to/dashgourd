@@ -88,6 +88,24 @@ class MysqlImporter(object):
         
         self.mysql_conn.close()
 
+def get_mysql_conn():
+    """Helper to get mysql connection
+    
+    Depends on various os environment variables to 
+    be set.
+    
+    Returns:
+        MySQLdb connection
+        
+    """
+    
+    return MySQLdb.connect(
+            user=os.environ.get('MYSQL_USER'),
+            passwd= os.environ.get('MYSQL_PASS'),
+            db= os.environ.get('MYSQL_DB'),
+            host= os.environ.get('MYSQL_HOST', 'localhost'),
+            port= os.environ.get('MYSQL_PORT', 3307)) 
+    
 class MysqlImportHelper(object):
     """Boilerplate wrapper for MysqlImporter
      
