@@ -11,7 +11,7 @@ group = [
 calc = [
     {"type":"avg", "action":"listened_song"},
     {"type":"pct", "action":"listened_song"},
-    {"type":"avg", "action":"bought_song"},
+    {"type":"avg", "action":["bought_song", "purchased_song"]},
     {"type":"pct", "action":"bought_song"},
     {"type":"avg", "action":"listened_song", "meta": "time", "by":"listened_song"}    
 ] 

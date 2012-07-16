@@ -36,6 +36,7 @@ def create_cohort_funnel(db, collection, options):
     
     TODO(richard-to): Error check options more thoroughly
     TODO(richard-to): Added weekly interval
+    TODO(richard-to): Option to print generated functions instead of running them.
     """
     
     query = options.get('query')
@@ -117,27 +118,40 @@ def create_cohort_funnel(db, collection, options):
     for data in calc:
     
         if 'name' not in data:
+            
+            if type(data['action']) is list:
+                action_name = "_or_".join(data['action'])
+            else:
+                action_name = data['action']
+                
             if data['type'] == 'avg':
-                data['name'] = data['action']
+                data['name'] = action_name
             elif data['type'] == 'pct': 
-                data['name'] = "{}_{}".format('has', data['action'])
+                data['name'] = "{}_{}".format('has', action_name)
                 
         if 'meta' in data:
             data['name'] = "{}_{}".format(data['name'], data['meta'])
             
         value_list.append(data['name'])
-        
-        if data['action'] not in value_map_dict:
-            value_map_dict[data['action']] = []
-        
+                
         if data['type'] == 'avg':
             if 'meta' in data:
                 code = "if(z.{m} != undefined){{ values.{n} += z.{m}; }}".format(m=data['meta'], n=data['name'])
             else:
                 code = "values.{}++;".format(data['name'])
         elif data['type'] == 'pct':
-            code = "values.{} = 1;".format(data['name'])            
-        value_map_dict[data['action']].append(code)
+            code = "values.{} = 1;".format(data['name'])
+            
+        if type(data['action']) is list:
+            action_list = data['action']
+        else:
+            action_list = [data['action']]
+        
+        for action in action_list:       
+            if action not in value_map_dict:
+                value_map_dict[action] = []
+                                   
+            value_map_dict[action].append(code)
     
         if 'calc_name' in data:    
             calc_name = data['calc_name']
@@ -152,9 +166,9 @@ def create_cohort_funnel(db, collection, options):
             by=data['by'], calc_name=calc_name, total=data['name'])
         value_final_calc.append(finalize_calc)
      
-    for key in value_map_dict:
-        code = " ".join(value_map_dict[key])    
-        cond = "if(z.name == '{}'){{ {} }}".format(key, code)      
+    for action in value_map_dict:
+        code = " ".join(value_map_dict[action])    
+        cond = "if(z.name == '{}'){{ {} }}".format(action, code)      
         value_map_list.append(cond)
         
     out_group_key = ", ".join(group_keys)
@@ -167,7 +181,20 @@ def create_cohort_funnel(db, collection, options):
     
     out_final_values_init = " ".join(["value.{v} = 0;".format(v=value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
-
+    
+    """
+    print mapper_template.format(
+        emit_key=out_group_key, 
+        init_emit_key=out_group_init_list,
+        init_values=out_values_init,
+        map_values=out_value_map)
+    
+    print reducer_template.format(out_values_init, out_reduce_sum)
+    
+    print finalizer_template.format(
+        out_final_values_init, out_final_values_calc)
+    """
+     
     mapper = Code(mapper_template.format(
         emit_key=out_group_key, 
         init_emit_key=out_group_init_list,

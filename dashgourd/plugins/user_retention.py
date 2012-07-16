@@ -121,7 +121,19 @@ def create_user_retention(db, collection, options):
         
     out_group_key = ", ".join(group_keys)
     out_group_init_list = " ".join(group_init_list)
-      
+    
+    """
+    print mapper_template.format(
+        emit_key=out_group_key,
+        emit_date_field=group_key_date,
+        init_emit_key=out_group_init_list,
+        action_name=action)
+    
+    print reducer_template
+    
+    print finalizer_template.format(group_key_date)
+    """
+    
     mapper = Code(mapper_template.format(
         emit_key=out_group_key,
         emit_date_field=group_key_date,
