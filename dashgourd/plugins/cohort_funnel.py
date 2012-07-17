@@ -48,6 +48,16 @@ def create_cohort_funnel(db, collection, options):
     mapper_template = """ 
     function() {{
 
+        var nums = [
+            "01", "02", "03", "04", "05",
+            "06", "07", "08", "09", "10",
+            "11", "12", "13", "14", "15",
+            "16", "17", "18", "19", "20",
+            "21", "22", "23", "24", "25",
+            "26", "27", "28", "29", "30", 
+            "31"            
+        ];
+        
         var values = {{
             count: 1,
             {init_values}
@@ -104,10 +114,10 @@ def create_cohort_funnel(db, collection, options):
         if 'type' not in value or value['type'] == 'value':
             group_init = 'var {m} = this.{m};'.format(m=value['meta'])
         elif value['type'] == 'monthly':
-            group_init = 'var {m} = this.{m}.getFullYear() + "/" + (this.{m}.getMonth() + 1) + "/1";'.format(m=value['meta'])
+            group_init = 'var {m} = this.{m}.getFullYear() + "/" + nums[this.{m}.getMonth()] + "/01";'.format(m=value['meta'])
         elif value['type'] == 'weekly':
             group_init = ("this.{m}.setDate(this.{m}.getDate() - this.{m}.getDay()); " +
-                "var {m} = this.{m}.getFullYear() + '/' + (this.{m}.getMonth() + 1) + '/' + this.{m}.getDate();").format(m=value['meta'])
+                "var {m} = this.{m}.getFullYear() + '/' + nums[this.{m}.getMonth()] + '/' + nums[this.{m}.getDate()-1];").format(m=value['meta'])
                         
         group_init_list.append(group_init)
         group_keys.append("{m}:{m}".format(m=value['meta']))    

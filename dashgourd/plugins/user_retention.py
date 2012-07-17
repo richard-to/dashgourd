@@ -1,3 +1,4 @@
+import math
 from bson.code import Code
 
 def create_user_retention(db, collection, options):
@@ -48,6 +49,16 @@ def create_user_retention(db, collection, options):
     mapper_template = """
     function(){{
 
+        var nums = [
+            "01", "02", "03", "04", "05",
+            "06", "07", "08", "09", "10",
+            "11", "12", "13", "14", "15",
+            "16", "17", "18", "19", "20",
+            "21", "22", "23", "24", "25",
+            "26", "27", "28", "29", "30", 
+            "31"            
+        ];
+        
         {init_emit_key}
         var startDateStr = {emit_date_field};   
         var startDate = new Date(startDateStr);
@@ -111,12 +122,12 @@ def create_user_retention(db, collection, options):
         if 'type' not in value or value['type'] == 'value':
             group_init = 'var {m} = this.{m};'.format(m=value['meta'])
         elif value['type'] == 'monthly':
-            group_init = 'var {m} = this.{m}.getFullYear() + "/" + (this.{m}.getMonth() + 1) + "/1";'.format(m=value['meta'])
+            group_init = 'var {m} = this.{m}.getFullYear() + "/" + nums[this.{m}.getMonth()] + "/01";'.format(m=value['meta'])
             group_key_date = value['meta']
             interval = value['type']
         elif value['type'] == 'weekly':
             group_init = ("this.{m}.setDate(this.{m}.getDate() - this.{m}.getDay()); " +
-                "var {m} = this.{m}.getFullYear() + '/' + (this.{m}.getMonth() + 1) + '/' + this.{m}.getDate();").format(m=value['meta'])
+                "var {m} = this.{m}.getFullYear() + '/' + nums[this.{m}.getMonth()] + '/' + nums[this.{m}.getDate()-1];").format(m=value['meta'])
             group_key_date = value['meta']
             interval = value['type']
               
@@ -124,11 +135,11 @@ def create_user_retention(db, collection, options):
         group_keys.append("{m}:{m}".format(m=value['meta']))
     
     if interval == 'monthly':
-        interval_code = ("var createdDateStr = z.created_at.getFullYear() + '/' + (z.created_at.getMonth() + 1) + '/1'; " +
+        interval_code = ("var createdDateStr = z.created_at.getFullYear() + '/' + nums[z.created_at.getMonth()] + '/01'; " +
             "z.created_at.setDate(1);");
     elif interval == 'weekly':
         interval_code = ("z.created_at.setDate(z.created_at.getDate() - z.created_at.getDay()); " +
-            "var createdDateStr = z.created_at.getFullYear() + '/' + (z.created_at.getMonth() + 1) + '/' + z.created_at.getDate();")
+            "var createdDateStr = z.created_at.getFullYear() + '/' + nums[z.created_at.getMonth()] + '/' +  nums[z.created_at.getDate()-1];")
     
     out_group_key = ", ".join(group_keys)
     out_group_init_list = " ".join(group_init_list)
@@ -158,4 +169,60 @@ def create_user_retention(db, collection, options):
     db.users.map_reduce(
         mapper, reducer, 
         out={'replace' : collection}, 
-        finalize=finalizer, query=query)    
+        finalize=finalizer, query=query)
+    
+def format_user_retention(data, dates_max=None, interval_max=None):
+    """Formats user retention data for output
+
+    Currently does not support additional groupings
+    like data+gender. Mainly seems unreasonable to do.
+    
+    Better creating separate retention charts for male/female 
+    in this case.
+    
+    This is geared more for output in html. Can also send data 
+    as JSON using python json library.
+    
+    Args:
+        data:User retention data returned from monogdb
+        dates_max: Max dates to show from newest to oldest
+        interval_max: Max date intervals to show.
+    
+    Return:
+        ordered_data: Ordered data with formatted percents and css classes
+    """
+    
+    ordered_data = []
+    temp_ordered_data = []
+    
+    for item in data:
+        temp_ordered_data.append(item)
+                
+        item['output'] = []
+        temp_output = []
+        
+        for key in item['value']:
+            output = {
+                'date': key,
+                'count': item['value'][key]['count'],
+                'pct': '{0:.1%}'.format(item['value'][key]['pct']),
+                'css_class': 'level_{:02.0f}'.format(math.floor(item['value'][key]['pct'] * 10))
+            }           
+            temp_output.append(output)
+            
+        temp_output.sort(key=lambda item:item['date'])
+        
+        if interval_max is not None:
+            item['output'] = temp_output[:interval_max]
+        else:
+            item['output'] = temp_output
+        
+    temp_ordered_data.sort(key=lambda item:item['_id']['created_at'])
+    if dates_max is not None:
+        ordered_data = temp_ordered_data[(dates_max*-1):]
+    else:
+        ordered_data = temp_ordered_data        
+
+    return ordered_data    
+    
+    
