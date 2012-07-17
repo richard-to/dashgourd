@@ -175,7 +175,7 @@ def format_user_retention(data, dates_max=None, interval_max=None):
     """Formats user retention data for output
 
     Currently does not support additional groupings
-    like data+gender. Mainly seems unreasonable to do.
+    like date+gender. Mainly seems unreasonable to do.
     
     Better creating separate retention charts for male/female 
     in this case.

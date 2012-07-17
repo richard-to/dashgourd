@@ -215,4 +215,37 @@ def create_cohort_funnel(db, collection, options):
         mapper, reducer, 
         out={'replace' : collection}, 
         finalize=finalizer, query=query)
+
+def format_cohort_funnel(data, fields, max_groups=None):
+        
+    ordered_data = []
+    temp_ordered_data = []
     
+    for item in data:
+        temp_ordered_data.append(item)
+        
+        item['output'] = []
+        temp_output = []
+        
+        for field in fields:
+            name = field['name']
+            if field['calc'] != 'total':
+                calc_name = "_".join([field['calc'], name])
+            else:
+                calc_name = name
+                
+            format = field['format']
+            output = {
+                'label': calc_name.replace('_', ' ').title(),
+                'count': item['value'][name],
+                'value': format.format(item['value'][calc_name])
+            }
+            item['output'].append(output)
+    
+    temp_ordered_data.sort(key=lambda item:item['_id']['created_at'], reverse=True)
+    if max_groups is not None:
+        ordered_data = temp_ordered_data[0:(max_groups)]
+    else:
+        ordered_data = temp_ordered_data        
+
+    return ordered_data        
