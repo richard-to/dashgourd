@@ -36,7 +36,6 @@ def create_user_retention(db, collection, options):
     action = 'signedin'
     
     TODO(richard-to): Error check options more thoroughly
-    TODO(richard-to): Added weekly interval
     """
 
     query = options.get('query')
@@ -49,11 +48,6 @@ def create_user_retention(db, collection, options):
     mapper_template = """
     function(){{
 
-        var months = [
-            "01", "02", "03", "04", 
-            "05", "06", "07", "08", 
-            "09", "10", "11", "12"];  
-        
         {init_emit_key}
         var startDateStr = {emit_date_field};   
         var startDate = new Date(startDateStr);
@@ -63,8 +57,9 @@ def create_user_retention(db, collection, options):
         
         this.actions.forEach(function(z){{
             if(z.name == '{action_name}'){{
-                var createdDateStr = z.created_at.getFullYear() + "/" + months[z.created_at.getMonth()] + "/01";
-                z.created_at.setDate(1);
+                
+                {interval_code}
+                
                 if(z.created_at >= startDate && values[createdDateStr] == undefined){{
                     values[createdDateStr] = {{count: 1}};
                 }}
@@ -108,17 +103,33 @@ def create_user_retention(db, collection, options):
     group_keys = []
     group_init_list = []
     
+    interval = 'monthly'
+    interval_code = ''
+    
     for value in group:
         
         if 'type' not in value or value['type'] == 'value':
             group_init = 'var {m} = this.{m};'.format(m=value['meta'])
         elif value['type'] == 'monthly':
-            group_init = 'var {m} = this.{m}.getFullYear() + "/" + months[this.{m}.getMonth()] + "/01";'.format(m=value['meta']);
+            group_init = 'var {m} = this.{m}.getFullYear() + "/" + (this.{m}.getMonth() + 1) + "/1";'.format(m=value['meta'])
             group_key_date = value['meta']
-            
+            interval = value['type']
+        elif value['type'] == 'weekly':
+            group_init = ("this.{m}.setDate(this.{m}.getDate() - this.{m}.getDay()); " +
+                "var {m} = this.{m}.getFullYear() + '/' + (this.{m}.getMonth() + 1) + '/' + this.{m}.getDate();").format(m=value['meta'])
+            group_key_date = value['meta']
+            interval = value['type']
+              
         group_init_list.append(group_init)
         group_keys.append("{m}:{m}".format(m=value['meta']))
-        
+    
+    if interval == 'monthly':
+        interval_code = ("var createdDateStr = z.created_at.getFullYear() + '/' + (z.created_at.getMonth() + 1) + '/1'; " +
+            "z.created_at.setDate(1);");
+    elif interval == 'weekly':
+        interval_code = ("z.created_at.setDate(z.created_at.getDate() - z.created_at.getDay()); " +
+            "var createdDateStr = z.created_at.getFullYear() + '/' + (z.created_at.getMonth() + 1) + '/' + z.created_at.getDate();")
+    
     out_group_key = ", ".join(group_keys)
     out_group_init_list = " ".join(group_init_list)
     
@@ -126,6 +137,7 @@ def create_user_retention(db, collection, options):
     print mapper_template.format(
         emit_key=out_group_key,
         emit_date_field=group_key_date,
+        interval_code=interval_code,        
         init_emit_key=out_group_init_list,
         action_name=action)
     
@@ -137,6 +149,7 @@ def create_user_retention(db, collection, options):
     mapper = Code(mapper_template.format(
         emit_key=out_group_key,
         emit_date_field=group_key_date,
+        interval_code=interval_code,
         init_emit_key=out_group_init_list,
         action_name=action))
     reducer = Code(reducer_template)
