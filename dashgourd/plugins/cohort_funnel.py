@@ -59,7 +59,7 @@ def create_cohort_funnel(db, collection, options):
         ];
         
         var values = {{
-            count: 1,
+            count: {{value:1, type:'total'}},
             {init_values}
         }}
         
@@ -75,18 +75,18 @@ def create_cohort_funnel(db, collection, options):
     reducer_template = """    
     function(key, values){{
         var result = {{
-            count: 0,
+            count: {{value:0, type:'total'}},
             {}
         }}
               
         values.forEach(function(value) {{
-            result.count += value.count;
+            result.count.value += value.count.value;
             {}
         }});
 
         return result;
     }}
-    """  
+    """
     
     finalizer_template = """
     function(key, value){{
@@ -130,24 +130,25 @@ def create_cohort_funnel(db, collection, options):
                 action_name = "_or_".join(data['action'])
             else:
                 action_name = data['action']
-                
-            if data['type'] == 'avg':
-                data['name'] = action_name
-            elif data['type'] == 'pct': 
+            
+            if data['type'] == 'pct': 
                 data['name'] = "{}_{}".format('has', action_name)
+            else:
+                data['name'] = action_name
                 
         if 'meta' in data:
             data['name'] = "{}_{}".format(data['name'], data['meta'])
-            
-        value_list.append(data['name'])
+        
+        if data['name'] not in value_list:    
+            value_list.append(data['name'])
                 
-        if data['type'] == 'avg':
+        if data['type'] == 'pct':
+            code = "values.{}.value = 1;".format(data['name'])
+        else:
             if 'meta' in data:
-                code = "if(z.{m} != undefined){{ values.{n} += z.{m}; }}".format(m=data['meta'], n=data['name'])
+                code = "if(z.{m} != undefined){{ values.{n}.value += z.{m}; }}".format(m=data['meta'], n=data['name'])
             else:
-                code = "values.{}++;".format(data['name'])
-        elif data['type'] == 'pct':
-            code = "values.{} = 1;".format(data['name'])
+                code = "values.{}.value++;".format(data['name'])
             
         if type(data['action']) is list:
             action_list = data['action']
@@ -156,37 +157,40 @@ def create_cohort_funnel(db, collection, options):
         
         for action in action_list:       
             if action not in value_map_dict:
-                value_map_dict[action] = []
+                value_map_dict[action] = {}
                                    
-            value_map_dict[action].append(code)
-    
-        if 'calc_name' in data:    
-            calc_name = data['calc_name']
-        else:
-            calc_name = "{}_{}".format(data['type'], data['name'])
-        value_final_list.append(calc_name)    
-       
-        if 'by' not in data:
-            data['by'] = 'count'
+            value_map_dict[action][data['name']] = code
+        
+        if data['type'] != 'total':
             
-        finalize_calc = "if(value.{by} != 0){{value.{calc_name} = value.{total}/value.{by};}}".format(
-            by=data['by'], calc_name=calc_name, total=data['name'])
-        value_final_calc.append(finalize_calc)
+            if 'by' not in data:
+                data['by'] = 'count'
+                            
+            if 'calc_name' in data:
+                calc_name = data['calc_name']
+            else:
+                calc_name = "{}_{}".format(data['type'], data['name'])
+            value_final_list.append({'name': calc_name, 'type':data['type'], 'total':data['name'], 'by':data['by']})    
+                           
+            finalize_calc = "if(value.{total}.value != 0){{value.{calc_name}.value = value.{total}.value/value.{by}.value;}}".format(
+                by=data['by'], calc_name=calc_name, total=data['name'])
+            value_final_calc.append(finalize_calc)
      
     for action in value_map_dict:
-        code = " ".join(value_map_dict[action])    
+        code = " ".join(value_map_dict[action].values())    
         cond = "if(z.name == '{}'){{ {} }}".format(action, code)      
         value_map_list.append(cond)
         
     out_group_key = ", ".join(group_keys)
     out_group_init_list = " ".join(group_init_list)
     
-    out_values_init = ", ".join(["{}:0".format(value) for value in value_list])
+    out_values_init = ", ".join(["{}: {{ value: 0, type:'total' }}".format(value) for value in value_list])
     out_value_map = " else ".join(value_map_list)
     
-    out_reduce_sum = " ".join(["result.{v} += value.{v};".format(v=value) for value in value_list])
+    out_reduce_sum = " ".join(["result.{v}.value += value.{v}.value;".format(v=value) for value in value_list])
     
-    out_final_values_init = " ".join(["value.{v} = 0;".format(v=value) for value in value_final_list])
+    out_final_values_init = " ".join(["value.{name} = {{ value:0, type: '{type}', 'total': '{total}', 'by': '{by}' }};".format(
+        **value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
     
     """
@@ -216,8 +220,45 @@ def create_cohort_funnel(db, collection, options):
         out={'replace' : collection}, 
         finalize=finalizer, query=query)
 
-def format_cohort_funnel(data, fields, max_groups=None):
+def format_cohort_funnel(data, fields, order=None, max_groups=None):
+    """Formats data for cohort funnels.
+    
+    Note that if you have a group with multiple field permutations, max_groups 
+    may not be effective as only set of data will be shown. For example if you 
+    sorted by gender and then date
+    Args:
+        data: Dict returned from pymongo.
+        fields: List of dicts that describe which fields to format.
+        order: List of group keys. None will use default order.
+        max_groups: Amount of data to return. Important for date cohorts mainly.
         
+    Returns:
+        ordered_data: Data ordered and formatted
+
+
+    Example:
+    
+        fields = [
+            {'name': 'count', 'label': 'Total Users'},
+            {'name': 'avg_purchased_cds'},
+            {'name': 'pct_has_purchased_cds'}      
+        ]
+        
+        or explicitly setting format:
+        
+        fields = [
+            {'name': 'count', 'format': '{}', 'label': 'Total Users'},
+            {'name': 'avg_purchased_cds', 'format': '{:.2}', 'label': 'Avg Purchased Cds'},
+            {'name': 'pct_has_purchased_cds', 'format': '{:.1%}'}      
+        ]        
+    """ 
+    
+    default_formats = {
+        'total': '{}',
+        'avg': '{:.2}',
+        'pct': '{:.1%}'
+    }
+    
     ordered_data = []
     temp_ordered_data = []
     
@@ -229,23 +270,36 @@ def format_cohort_funnel(data, fields, max_groups=None):
         
         for field in fields:
             name = field['name']
-            if field['calc'] != 'total':
-                calc_name = "_".join([field['calc'], name])
+            
+            if 'label' not in field:
+                label = name.replace('_', ' ').title()
             else:
-                calc_name = name
-                
-            format = field['format']
+                label = field['label']
+               
+            if 'format' not in field:
+                format = default_formats[item['value'][name]['type']]
+            else:
+                format = field['format']
+            
             output = {
-                'label': calc_name.replace('_', ' ').title(),
-                'count': item['value'][name],
-                'value': format.format(item['value'][calc_name])
+                'label': label,
+                'value': format.format(item['value'][name]['value'])
             }
             item['output'].append(output)
     
-    temp_ordered_data.sort(key=lambda item:item['_id']['created_at'], reverse=True)
+            if order is None:
+                order = []
+                for key in item['_id']:
+                    order.append(item['_id'][key])
+    
+            item['title'] = "-".join([item['_id'][key] for key in order])
+            
+    for key in reversed(order):        
+        temp_ordered_data.sort(key=lambda item:item['_id'][key], reverse=True)
+        
     if max_groups is not None:
         ordered_data = temp_ordered_data[0:(max_groups)]
     else:
         ordered_data = temp_ordered_data        
 
-    return ordered_data        
+    return ordered_data
