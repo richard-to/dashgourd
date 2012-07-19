@@ -1,5 +1,6 @@
 from dashgourd.plugins.cohort_funnel import create_cohort_funnel
 from dashgourd.plugins.user_retention import create_user_retention
+from dashgourd.plugins.event_cohort import create_event_cohort
 
 class ChartsApi(object):
     """Api for charts.
@@ -19,7 +20,8 @@ class ChartsApi(object):
         self.db = mongodb_db
         self.plugins = {
             'cohort_funnel':create_cohort_funnel,
-            'user_retention':create_user_retention} 
+            'user_retention':create_user_retention,
+            'event_cohort':create_event_cohort} 
       
     def get_chart(self, collection):      
         """Gets chart from DashGourd

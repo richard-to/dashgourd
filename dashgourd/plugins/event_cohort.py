@@ -1,30 +1,54 @@
 from bson.code import Code
 
-def create_cohort_funnel(db, collection, options):
-    """Creates data for cohort funnels or plain funnels
+def create_event_cohort(db, collection, options):
+    """Creates data event based cohorts
     
-    Creates collection of calculated data for cohort funnels using
-    generated map reduce functions.
-
-    Group currently accepts top level user fields, so no events.
+    This is more of a short term solution to handle 
+    cohorts based on events.
+    
+    This is not too useful since grouping by user 
+    attributes makes more sense most of the time.
         
-    Currently can calculate totals, averages percentages.
+    Unfortunately I need this functionality for a few 
+    use cases. Will develop this further as needed.
+    
+    Unfortunately the current format of putting events as
+    embedded documents makes this possibly inefficient. 
+    Haven't benchmarked or tried the alternative approach 
+    of putting events as top level events.
+    
+    Restrictions:
+    
+    Event groups can only be grouped by one value for now.
+    
+    Events that are grouped must be connected by a meta value 
+    like an id. This is needed to group these together into 
+    an object and then emit these by the event grouping.
     
     Args:
         db: PyMongo db instance
         collection: Name of collection to create
         options: Dict with query, group and calc fields
             query: Mongo db query to select rows to operate on
-            group: List of dicts to define how data is grouped
+            focus: Actions to focus on. They must be connected by a meta value
+            user_group: List of dicts to define how data is grouped by user (optional)
+            event_group: Dict for event meta to be grouped. Singular for now.
             calc: List of dicts to define how to calculate data
+            
+    Example (Poor example):
     
-    Example:
+    query = {"actions": { "$exists": True}}
     
-    query = {"gender": "Male", "actions": { "$exists": True}}
-    
-    group = [
-        {'meta': 'created_at', 'type': 'monthly'}  
+    focus = {
+        'actions': ['listened_song', 'bought_song', 'bought_album'], 
+        'meta': 'album_id'
+    }
+     
+    user_group = [
+        {'meta': 'gender'},  
     ]
+    
+    event_group = {'action': 'listened_song', meta': 'created_at', 'type': 'monthly'}
     
     calc = [
         {"type":"avg", "action":"listened_song"},
@@ -34,18 +58,19 @@ def create_cohort_funnel(db, collection, options):
         {"type":"avg", "action":"listened_song", "meta": "time", "by":"listened_song"}    
     ]
     
-    TODO(richard-to): Error check options more thoroughly
-    TODO(richard-to): Option to print generated functions instead of running them.
-    TODO(richard-to): Add option to do merge, reduce or replace for map reduce.
+    TODO(richard-to): A lot of duplicate code from cohort funnel. Hard to read too.
     """
     
     query = options.get('query')
-    group = options.get('group')
+    focus = options.get('focus')
+    user_group = options.get('user_group')
+    event_group = options.get('event_group')
     calc = options.get('calc')
     
-    if query is None or group is None or calc is None:
+    if focus is None or query is None or event_group is None or calc is None:
         return False
     
+
     mapper_template = """ 
     function() {{
 
@@ -59,20 +84,36 @@ def create_cohort_funnel(db, collection, options):
             "31"            
         ];
         
-        var values = {{
-            count: {{value:1, type:'total'}},
-            {init_values}
-        }}
+        var values = {{}}
         
         {init_emit_key}
-
+        
+        var emit_key = {{
+            {emit_key}
+        }}
+        
         this.actions.forEach(function(z){{
-            {map_values}                       
+            
+            if({init_values_cond}){{
+                if(values[z.{event_meta}] == undefined){{
+                    values[z.{event_meta}] = {{
+                        'count':{{'value':0, type:'total'}},
+                        {init_values}                       
+                    }};
+                }}
+            }}
+            
+            {map_values}
+        
         }});
         
-        {adjust_values}
+        for(key in events) {{
         
-        emit({{ {emit_key} }}, values);        
+            {adjust_values}
+            
+            emit_key.{event_meta_group} = values[key].{event_meta_group};
+            emit(emit_key, values[key]);
+        }}        
     }}
     """
     
@@ -108,7 +149,7 @@ def create_cohort_funnel(db, collection, options):
         'at_most': '<=',
         'exactly': '=='
     }
-            
+
     value_list = []
     value_map_dict = {}
     value_map_list = []
@@ -119,8 +160,16 @@ def create_cohort_funnel(db, collection, options):
     
     group_keys = []
     group_init_list = []
+
+    event_meta = focus['meta']
     
-    for value in group:
+    event_actions = focus['actions']
+    
+    event_meta_group = event_group['meta']
+    
+    event_group_init = None
+    
+    for value in user_group:
         
         if 'type' not in value or value['type'] == 'value':
             group_init = 'var {m} = this.{m};'.format(m=value['meta'])
@@ -129,10 +178,18 @@ def create_cohort_funnel(db, collection, options):
         elif value['type'] == 'weekly':
             group_init = ("this.{m}.setDate(this.{m}.getDate() - this.{m}.getDay()); " +
                 "var {m} = this.{m}.getFullYear() + '/' + nums[this.{m}.getMonth()] + '/' + nums[this.{m}.getDate()-1];").format(m=value['meta'])
-                        
+        
         group_init_list.append(group_init)
         group_keys.append("{m}:{m}".format(m=value['meta']))    
-   
+
+    if 'type' not in event_group or event_group['type'] == 'value':
+        event_group_init = 'values[{n}].{m} = z.{m}; '.format(n=event_meta, m=value['meta'])
+    elif event_group['type'] == 'monthly':
+        event_group_init = 'values[{n}].{m} = z.{m}.getFullYear() + "/" + nums[z.{m}.getMonth()] + "/01"; '.format(n=event_meta, m=value['meta'])
+    elif event_group['type'] == 'weekly':
+        event_group_init = ("z.{m}.setDate(z.{m}.getDate() - z.{m}.getDay()); " +
+            "values[{n}].{m} = z.{m}.getFullYear() + '/' + nums[z.{m}.getMonth()] + '/' + nums[z.{m}.getDate()-1]; ").format(n=event_meta, m=value['meta'])
+    
     for data in calc:
     
         if 'name' not in data:
@@ -171,9 +228,10 @@ def create_cohort_funnel(db, collection, options):
                 
 
         if 'meta' in data:
-            code = "if(z.{m} != undefined){{ values.{n}.value += z.{m}; }}".format(m=data['meta'], n=data['name'])
+            code = "if(z.{m} != undefined){{ values['e'].{n}.value += z.{m}; }}".format(
+                m=data['meta'], e=event_meta, n=data['name'])
         else:
-            code = "values.{}.value++;".format(data['name'])
+            code = "values['{}'].{}.value++;".format(event_meta, data['name'])
         
             
         if type(data['action']) is list:
@@ -188,7 +246,7 @@ def create_cohort_funnel(db, collection, options):
             value_map_dict[action][data['name']] = code
         
         if data['type'] == 'pct':                
-            cond_code = ("values.{name}.value = (values.{name}.value {op} {value}) ? 1 : 0; ").format(
+            cond_code = ("values[key].{name}.value = (values[key].{name}.value {op} {value}) ? 1 : 0; ").format(
                 name=data['name'], op=accepted_conditions[data['cond']['type']], value=data['cond']['value'])
             value_adjust_list.append(cond_code)
         
@@ -206,14 +264,22 @@ def create_cohort_funnel(db, collection, options):
             finalize_calc = "if(value.{total}.value != 0){{value.{calc_name}.value = value.{total}.value/value.{by}.value;}}".format(
                 by=data['by'], calc_name=calc_name, total=data['name'])
             value_final_calc.append(finalize_calc)
-     
+    
+    code = " ".join(["events[{}].count.value = 1; ".format(event_meta), event_group_init])
+    cond = "if(z.name == '{}'){{ {} }}".format(event_group['action'], code)
+    value_map_list.append(cond)
+    
     for action in value_map_dict:
         code = " ".join(value_map_dict[action].values())    
         cond = "if(z.name == '{}'){{ {} }}".format(action, code)      
         value_map_list.append(cond)
-
-    out_group_init_list = " ".join(group_init_list)        
+                         
+    out_group_init_list = " ".join(group_init_list)
     out_group_key = ", ".join(group_keys)
+      
+    out_init_values_cond = " || ".join(["z.name == '{}'".format(action) for action in event_actions])
+    out_event_meta = event_meta
+    out_event_meta_group = event_meta_group
 
     out_values_init = ", ".join(["{}: {{ value: 0, type:'total' }}".format(value) for value in value_list])
     out_value_map = " else ".join(value_map_list)
@@ -225,102 +291,31 @@ def create_cohort_funnel(db, collection, options):
     out_final_values_init = " ".join(["value.{name} = {{ value:0, type: '{type}', 'total': '{total}', 'by': '{by}' }};".format(
         **value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
-    
+                        
+    print mapper_template.format(
+        emit_key=out_group_key, 
+        init_emit_key=out_group_init_list,
+        init_values_cond=out_init_values_cond,
+        event_meta=out_event_meta,
+        adjust_values=out_values_adjust, 
+        init_values=out_values_init,
+        event_meta_group=out_event_meta_group,
+        map_values=out_value_map)
+        
     mapper = Code(mapper_template.format(
         emit_key=out_group_key, 
         init_emit_key=out_group_init_list,
+        init_values_cond=out_init_values_cond,
+        event_meta=out_event_meta,
+        adjust_values=out_values_adjust, 
         init_values=out_values_init,
-        map_values=out_value_map,
-        adjust_values=out_values_adjust))
+        event_meta_group=out_event_meta_group,        
+        map_values=out_value_map))
     reducer = Code(reducer_template.format(out_values_init, out_reduce_sum))        
     finalizer = Code(finalizer_template.format(
         out_final_values_init, out_final_values_calc))
     
-    db.users.map_reduce(
-        mapper, reducer, 
-        out={'replace' : collection}, 
-        finalize=finalizer, query=query)
-
-def format_cohort_funnel(data, fields, order=None, max_groups=None):
-    """Formats data for cohort funnels.
-    
-    Note that if you have a group with multiple field permutations, max_groups 
-    may not be effective as only set of data will be shown. For example if you 
-    sorted by gender and then date
-    Args:
-        data: Dict returned from pymongo.
-        fields: List of dicts that describe which fields to format.
-        order: List of group keys. None will use default order.
-        max_groups: Amount of data to return. Important for date cohorts mainly.
-        
-    Returns:
-        ordered_data: Data ordered and formatted
-
-
-    Example:
-    
-        fields = [
-            {'name': 'count', 'label': 'Total Users'},
-            {'name': 'avg_purchased_cds'},
-            {'name': 'pct_has_purchased_cds'}      
-        ]
-        
-        or explicitly setting format:
-        
-        fields = [
-            {'name': 'count', 'format': '{}', 'label': 'Total Users'},
-            {'name': 'avg_purchased_cds', 'format': '{:.2}', 'label': 'Avg Purchased Cds'},
-            {'name': 'pct_has_purchased_cds', 'format': '{:.1%}'}      
-        ]        
-    """ 
-    
-    default_formats = {
-        'total': '{}',
-        'avg': '{:.2}',
-        'pct': '{:.1%}'
-    }
-    
-    ordered_data = []
-    temp_ordered_data = []
-    
-    for item in data:
-        temp_ordered_data.append(item)
-        
-        item['output'] = []
-        temp_output = []
-        
-        for field in fields:
-            name = field['name']
-            
-            if 'label' not in field:
-                label = name.replace('_', ' ').title()
-            else:
-                label = field['label']
-               
-            if 'format' not in field:
-                format = default_formats[item['value'][name]['type']]
-            else:
-                format = field['format']
-            
-            output = {
-                'label': label,
-                'value': format.format(item['value'][name]['value'])
-            }
-            item['output'].append(output)
-    
-            if order is None:
-                order = []
-                for key in item['_id']:
-                    order.append(item['_id'][key])
-    
-            item['title'] = "-".join([item['_id'][key] for key in order])
-            
-    for key in reversed(order):        
-        temp_ordered_data.sort(key=lambda item:item['_id'][key], reverse=True)
-        
-    if max_groups is not None:
-        ordered_data = temp_ordered_data[0:(max_groups)]
-    else:
-        ordered_data = temp_ordered_data        
-
-    return ordered_data
+    #db.users.map_reduce(
+    #    mapper, reducer, 
+    #    out={'replace' : collection}, 
+    #    finalize=finalizer, query=query)    
