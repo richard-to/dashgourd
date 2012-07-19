@@ -97,7 +97,7 @@ def create_event_cohort(db, collection, options):
             if({init_values_cond}){{
                 if(values[z.{event_meta}] == undefined){{
                     values[z.{event_meta}] = {{
-                        'count':{{'value':0, type:'total'}},
+                        count:{{'value':0, type:'total'}},
                         {init_values}                       
                     }};
                 }}
@@ -107,7 +107,7 @@ def create_event_cohort(db, collection, options):
         
         }});
         
-        for(key in events) {{
+        for(key in values) {{
         
             {adjust_values}
             
@@ -183,12 +183,14 @@ def create_event_cohort(db, collection, options):
         group_keys.append("{m}:{m}".format(m=value['meta']))    
 
     if 'type' not in event_group or event_group['type'] == 'value':
-        event_group_init = 'values[{n}].{m} = z.{m}; '.format(n=event_meta, m=value['meta'])
+        event_group_init = 'values[z.{n}].{m} = z.{m}; '.format(n=event_meta, m=event_group['meta'])
     elif event_group['type'] == 'monthly':
-        event_group_init = 'values[{n}].{m} = z.{m}.getFullYear() + "/" + nums[z.{m}.getMonth()] + "/01"; '.format(n=event_meta, m=value['meta'])
+        event_group_init = 'values[z.{n}].{m} = z.{m}.getFullYear() + "/" + nums[z.{m}.getMonth()] + "/01"; '.format(
+            n=event_meta, m=event_group['meta'])
     elif event_group['type'] == 'weekly':
         event_group_init = ("z.{m}.setDate(z.{m}.getDate() - z.{m}.getDay()); " +
-            "values[{n}].{m} = z.{m}.getFullYear() + '/' + nums[z.{m}.getMonth()] + '/' + nums[z.{m}.getDate()-1]; ").format(n=event_meta, m=value['meta'])
+            "values[z.{n}].{m} = z.{m}.getFullYear() + '/' + nums[z.{m}.getMonth()] + '/' + nums[z.{m}.getDate()-1]; ").format(
+                n=event_meta, m=event_group['meta'])
     
     for data in calc:
     
@@ -228,10 +230,10 @@ def create_event_cohort(db, collection, options):
                 
 
         if 'meta' in data:
-            code = "if(z.{m} != undefined){{ values['e'].{n}.value += z.{m}; }}".format(
+            code = "if(z.{m} != undefined){{ values[z.{e}].{n}.value += z.{m}; }}".format(
                 m=data['meta'], e=event_meta, n=data['name'])
         else:
-            code = "values['{}'].{}.value++;".format(event_meta, data['name'])
+            code = "values[z.{}].{}.value++;".format(event_meta, data['name'])
         
             
         if type(data['action']) is list:
@@ -265,7 +267,7 @@ def create_event_cohort(db, collection, options):
                 by=data['by'], calc_name=calc_name, total=data['name'])
             value_final_calc.append(finalize_calc)
     
-    code = " ".join(["events[{}].count.value = 1; ".format(event_meta), event_group_init])
+    code = " ".join(["values[z.{}].count.value = 1; ".format(event_meta), event_group_init])
     cond = "if(z.name == '{}'){{ {} }}".format(event_group['action'], code)
     value_map_list.append(cond)
     
@@ -315,7 +317,7 @@ def create_event_cohort(db, collection, options):
     finalizer = Code(finalizer_template.format(
         out_final_values_init, out_final_values_calc))
     
-    #db.users.map_reduce(
-    #    mapper, reducer, 
-    #    out={'replace' : collection}, 
-    #    finalize=finalizer, query=query)    
+    db.users.map_reduce(
+        mapper, reducer, 
+        out={'replace' : collection}, 
+        finalize=finalizer, query=query)    
