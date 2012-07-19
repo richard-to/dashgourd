@@ -294,16 +294,6 @@ def create_event_cohort(db, collection, options):
         **value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
                         
-    print mapper_template.format(
-        emit_key=out_group_key, 
-        init_emit_key=out_group_init_list,
-        init_values_cond=out_init_values_cond,
-        event_meta=out_event_meta,
-        adjust_values=out_values_adjust, 
-        init_values=out_values_init,
-        event_meta_group=out_event_meta_group,
-        map_values=out_value_map)
-        
     mapper = Code(mapper_template.format(
         emit_key=out_group_key, 
         init_emit_key=out_group_init_list,
