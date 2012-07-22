@@ -1,4 +1,5 @@
 from bson.code import Code
+import gviz_api
 
 def create_cohort_funnel(db, collection, options):
     """Creates data for cohort funnels or plain funnels
@@ -126,7 +127,7 @@ def create_cohort_funnel(db, collection, options):
         if 'type' not in value or value['type'] == 'value':
             group_init = 'var {m} = this.{m};'.format(m=value['meta'])
         elif value['type'] == 'ab':
-            group_init = 'var {m} = this.ab.{m};'.format(m=value['meta'])                        
+            group_init = 'var {m} = "variation_" + parseInt(this.ab.{m});'.format(m=value['meta'])                        
         elif value['type'] == 'monthly':
             group_init = 'var {m} = this.{m}.getFullYear() + "/" + nums[this.{m}.getMonth()] + "/01";'.format(m=value['meta'])
         elif value['type'] == 'weekly':
@@ -244,20 +245,23 @@ def create_cohort_funnel(db, collection, options):
         out={'replace' : collection}, 
         finalize=finalizer, query=query)
 
-def format_cohort_funnel(data, fields, order=None, max_groups=None):
+def format_cohort_funnel(results, fields, order=None, max_groups=None):
     """Formats data for cohort funnels.
     
     Note that if you have a group with multiple field permutations, max_groups 
     may not be effective as only set of data will be shown. For example if you 
-    sorted by gender and then date
+    sorted by gender and then date.
+    
+    Data is formatted using the Google Visualization Api python library
+    
     Args:
-        data: Dict returned from pymongo.
+        results: Dict returned from pymongo.
         fields: List of dicts that describe which fields to format.
-        order: List of group keys. None will use default order.
+        order: List of dict group keys and order direction. None will use default order.
         max_groups: Amount of data to return. Important for date cohorts mainly.
         
     Returns:
-        ordered_data: Data ordered and formatted
+        vis_data: Data formatted for visualisation
 
 
     Example:
@@ -283,47 +287,130 @@ def format_cohort_funnel(data, fields, order=None, max_groups=None):
         'pct': '{:.1%}'
     }
     
-    ordered_data = []
-    temp_ordered_data = []
-    
-    for item in data:
-        temp_ordered_data.append(item)
-        
-        item['output'] = []
-        temp_output = []
-        
+    description = {}    
+    data = []
+   
+    for result in results:
+
+        row = {}
+        value = result['value']
         for field in fields:
             name = field['name']
+            calc_type = value[name]['type']
+            label = field.get('label', name.replace('_', ' ').title())
+            data_format = field.get('format', default_formats[calc_type])
             
-            if 'label' not in field:
-                label = name.replace('_', ' ').title()
+            if calc_type == 'total':
+                row[name] = int(value[name]['value'])
             else:
-                label = field['label']
-               
-            if 'format' not in field:
-                format = default_formats[item['value'][name]['type']]
-            else:
-                format = field['format']
+                row[name] = (value[name]['value'], data_format.format(value[name]['value']))
             
-            output = {
-                'label': label,
-                'value': format.format(item['value'][name]['value'])
-            }
-            item['output'].append(output)
-    
+            description[name] = ("number", label) 
+            
+            for key in result['_id']:
+                row[key] = result['_id'][key]
+                
             if order is None:
                 order = []
-                for key in item['_id']:
-                    order.append(item['_id'][key])
-    
-            item['title'] = "-".join([item['_id'][key] for key in order])
+                for key in result['_id']:
+                    order.append({"name":result['_id'][key]})
             
-    for key in reversed(order):        
-        temp_ordered_data.sort(key=lambda item:item['_id'][key], reverse=True)
+        data.append(row)
+        
+    for group in reversed(order):
+        description[group['name']] = ("string", group.get('label', group['name'].replace('_', ' ').title())) 
+        data.sort(key=lambda item:item[group['name']], reverse=group.get('reverse', False))
         
     if max_groups is not None:
-        ordered_data = temp_ordered_data[0:(max_groups)]
-    else:
-        ordered_data = temp_ordered_data        
+        data = data[0:(max_groups)]
+    
+    return {'data':data, 'description':description}
 
-    return ordered_data
+def format_abtest(results, fields, order=None, max_groups=None):
+    """Formats data for ab test
+    
+    Wrapper for `format_cohort_funnel` but provides net change
+    calculation from control.
+    
+    Args:
+        results: Dict returned from pymongo.
+        fields: List of dicts that describe which fields to format.
+        order: List of dict group keys and order direction. None will use default order.
+        max_groups: Amount of data to return. Important for date cohorts mainly.
+        
+    Returns:
+        data: Dict of data list and description of table schema    
+    """
+
+    change_formats = {
+        'total': '{:+}',
+        'avg': '{:+.2}',
+        'pct': '{:+.1%}'
+    }
+        
+    default_formats = {
+        'total': '{}',
+        'avg': '{:.2}',
+        'pct': '{:.1%}'
+    }
+    
+    description = {}    
+    data = []
+    data_key = {}
+    variations = []
+    description['metric'] = ("string", "Metric")
+    description['change'] = ("string", "% Change")
+
+    for result in results:
+        
+        for key in result['_id']:
+            variation = result['_id'][key]
+            if variation not in description:
+                variations.append(variation)
+                description[variation] = ('number', variation.replace('_', ' ').title())
+                change_key = "change_{}".format(variation)
+                description[change_key] = ("number", "% Change")
+                        
+        value = result['value']
+        for field in fields:
+            
+            name = field['name']
+            
+            if name not in data_key:
+                data_key[name] = {'idx': len(data), 'calc_type': value[name]['type']}
+                row = {'metric': field.get('label', name.replace('_', ' ').title())}
+                data.append(row)
+            else:
+                row = data[data_key[name]['idx']]
+
+            calc_type = value[name]['type']
+            data_format = field.get('format', default_formats[calc_type])
+            
+
+            if calc_type == 'total':
+                row[variation] = int(value[name]['value'])
+            else:
+                row[variation] = (value[name]['value'], data_format.format(value[name]['value']))
+
+            
+            if order is None:
+                order = []
+                for key in result['_id']:
+                    order.append({"name":result['_id'][key]})
+    
+    control = variations[0]
+    for key in data_key:
+        idx = data_key[key]['idx']
+        calc_type = data_key[key]['calc_type']
+        data_format = field.get('format', change_formats[calc_type])
+        row = data[idx]   
+        for variation in variations:
+            change_key = "change_{}".format(variation)
+            
+            if calc_type == 'total':
+                row[change_key] = row[variation] - row[control]
+            else:
+                change = row[variation][0] - row[control][0]
+                row[change_key] = (change, data_format.format(change))
+
+    return {'data':data, 'description':description}
