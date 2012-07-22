@@ -125,6 +125,8 @@ def create_cohort_funnel(db, collection, options):
         
         if 'type' not in value or value['type'] == 'value':
             group_init = 'var {m} = this.{m};'.format(m=value['meta'])
+        elif value['type'] == 'ab':
+            group_init = 'var {m} = this.ab.{m};'.format(m=value['meta'])                        
         elif value['type'] == 'monthly':
             group_init = 'var {m} = this.{m}.getFullYear() + "/" + nums[this.{m}.getMonth()] + "/01";'.format(m=value['meta'])
         elif value['type'] == 'weekly':
@@ -226,7 +228,7 @@ def create_cohort_funnel(db, collection, options):
     out_final_values_init = " ".join(["value.{name} = {{ value:0, type: '{type}', 'total': '{total}', 'by': '{by}' }};".format(
         **value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
-    
+        
     mapper = Code(mapper_template.format(
         emit_key=out_group_key, 
         init_emit_key=out_group_init_list,
