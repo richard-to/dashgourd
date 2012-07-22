@@ -28,8 +28,7 @@ class ActionsApi(object):
             data['actions'] = []
             data['ab'] = {}
             self.db.users.insert(data)
-            
-                
+                       
     def insert_action(self, data):
         """Logs a user action
         
@@ -62,7 +61,24 @@ class ActionsApi(object):
             
             self.db.users.update({ 'user_id':user_id }, { '$push': { 'actions': data } })
     
-    
+    def tag_abtest(self, data): 
+        """Tags as a user as being part of an ab test
+        
+        Ab tests are stored on the user object as a dictionary.
+        
+        Args:
+            data: Dict that contains `user_id` `abtest` `variation`
+        """
+        
+        if ('user_id' in data and 
+            'abtest' in data and 
+            'variation' in data):
+            
+            abtest = ".".join(['ab', data['abtest']])
+            self.db.users.update(
+                { 'user_id': data['user_id'] }, 
+                { '$set': { abtest: data['variation'] } })
+                    
     def register_action(self, name, label=None):
         """Registers an action type into the actions collection.
         
@@ -86,5 +102,4 @@ class ActionsApi(object):
             if not label:
                 label = formatted_name.replace('_', ' ', ).title()
             self.db.actions.update({"name": formatted_name}, 
-                {"name": formatted_name, 'label': label}, True)
-            
+                {"name": formatted_name, 'label': label}, True)          

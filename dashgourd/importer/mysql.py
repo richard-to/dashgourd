@@ -28,7 +28,7 @@ class MysqlImporter(object):
         The data will be inserted as is into the user collection.
         This method inserts new users and does not update them.
         
-        Make sure one field is named `_id`.
+        Make sure one field is named `user_id`.
         
         `actions` is reserved for user actions
         
@@ -56,7 +56,7 @@ class MysqlImporter(object):
         The data will be inserted into the embedded document list named
         `actions`.
         
-        The data must include the following fields `_id`, `name`, `created_at`.
+        The data must include the following fields `user_id`, `name`, `created_at`.
         If the data does not contain those fields, then the api will fail silently
         and not insert that row.
         
@@ -78,7 +78,33 @@ class MysqlImporter(object):
                 self.api.insert_action(data)
             
             cursor.close() 
- 
+
+    def import_abtests(self, abtest, query):
+        """Imports abtests into DashGourd
+        
+        The data will be inserted into an object named `ab`
+        
+        The data must include the following fields `user_id`, `abtest`, `variation`.
+        
+        If the data does not contain those fields, then the api will fail silently
+        and not insert that row.
+        
+        Args:
+            abtest: Ab test name
+            query: MySQL query to run
+        """        
+        if self.mysql_conn.open:
+            cursor = self.mysql_conn.cursor(MySQLdb.cursors.DictCursor)
+            cursor.execute(query)
+            numrows = int(cursor.rowcount)
+            
+            for i in range(numrows):        
+                data = cursor.fetchone()
+                data['abtest'] = abtest
+                self.api.tag_abtest(data)
+            
+            cursor.close() 
+             
     def close(self):
         """Closes MySQL connection
         
@@ -141,7 +167,17 @@ class MysqlImportHelper(object):
             query: Query used to import actions
         """
         
-        self.importer.import_actions( name, query) 
-           
+        self.importer.import_actions(name, query) 
+   
+    def import_abtests(self, abtest, query):
+        """Wrapper for MysqlImporter.import_actions
+    
+        Args:
+            abtest: Abtest name
+            query: Query used to import actions
+        """
+        
+        self.importer.import_abtests(abtest, query) 
+                   
     def close(self):
         self.importer.close()
