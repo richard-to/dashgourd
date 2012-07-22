@@ -144,4 +144,4 @@ class MysqlImportHelper(object):
         self.importer.import_actions( name, query) 
            
     def close(self):
-        self.importer.close()               
+        self.importer.close()

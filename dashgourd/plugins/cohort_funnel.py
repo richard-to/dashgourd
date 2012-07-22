@@ -37,6 +37,7 @@ def create_cohort_funnel(db, collection, options):
     TODO(richard-to): Error check options more thoroughly
     TODO(richard-to): Option to print generated functions instead of running them.
     TODO(richard-to): Add option to do merge, reduce or replace for map reduce.
+    TODO(richard-to): Factor out default count value? Or is it always required? Else rename to "total"?
     """
     
     query = options.get('query')

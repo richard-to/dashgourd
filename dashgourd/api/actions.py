@@ -21,11 +21,12 @@ class ActionsApi(object):
         When creating a user, no actions can be included yet.
         
         Args:
-            data: Dict that contains at least an `_id` key
+            data: Dict that contains at least an `user_id` key
         """
          
-        if '_id' in data:
+        if 'user_id' in data:
             data['actions'] = []
+            data['ab'] = {}
             self.db.users.insert(data)
             
                 
@@ -35,7 +36,7 @@ class ActionsApi(object):
         Actions that have not been logged in the db
         are stored in an action collection.
         
-        `_id` is used to find the user that did the action.
+        `user_id` is used to find the user that did the action.
         
         `type` is basically the slug name of the action.
         
@@ -49,17 +50,17 @@ class ActionsApi(object):
         
         
         Args:
-            data: Dict that contains `_id`, `name`, and `created_at` keys
+            data: Dict that contains `user_id`, `name`, and `created_at` keys
         """        
         
-        if ('_id' in data and 
+        if ('user_id' in data and 
             'name' in data and 
             'created_at' in data):
             
-            _id = data['_id']
-            del data['_id']
+            user_id = data['user_id']
+            del data['user_id']
             
-            self.db.users.update({ '_id':_id }, { '$push': { 'actions': data } })
+            self.db.users.update({ 'user_id':user_id }, { '$push': { 'actions': data } })
     
     
     def register_action(self, name, label=None):
