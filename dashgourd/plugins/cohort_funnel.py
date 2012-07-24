@@ -149,7 +149,7 @@ def create_cohort_funnel(db, collection, options):
             if data['type'] == 'pct': 
                 
                 cond = {
-                    'type': "at_least",
+                    'type': "total",
                     'value': 1
                 }
                 
@@ -162,8 +162,11 @@ def create_cohort_funnel(db, collection, options):
                 
                 data['cond'] = cond
                 
-                data['name'] = "{}_{}_{}_{}".format(
-                    'has', data['cond']['type'], data['cond']['value'], action_name)
+                if data['cond']['type'] != 'total':               
+                    data['name'] = "{}_{}_{}_{}".format(
+                        'has', data['cond']['type'], data['cond']['value'], action_name)
+                else:
+                    data['name'] = action_name
             else:
                 data['name'] = action_name
                 
@@ -191,7 +194,7 @@ def create_cohort_funnel(db, collection, options):
                                    
             value_map_dict[action][data['name']] = code
         
-        if data['type'] == 'pct':                
+        if data['type'] == 'pct' and data['cond']['type'] != 'total':                
             cond_code = ("values.{name}.value = (values.{name}.value {op} {value}) ? 1 : 0; ").format(
                 name=data['name'], op=accepted_conditions[data['cond']['type']], value=data['cond']['value'])
             value_adjust_list.append(cond_code)
