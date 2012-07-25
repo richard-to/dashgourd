@@ -1,6 +1,5 @@
 import math
 from datetime import datetime
-from dateutil import relativedelta
 from bson.code import Code
 
 def create_user_retention(db, collection, options):

@@ -516,7 +516,13 @@ def format_chart(results, title, fields, x_axis=None, group=None):
             
             calc_type = value[name]['type']
             data_format = field.get('format', default_formats[calc_type])
-            data_value = value[name]['value']*100 if calc_type == 'pct' else value[name]['value']
+            
+            if calc_type == 'pct':
+                data_value = value[name]['value']*100
+                chart_type = 'pct_line_chart'
+            else:
+                data_value = value[name]['value']
+
             row[line_name] = (
                 data_value, data_format.format(value[name]['value']))
 
