@@ -5,6 +5,7 @@ setup(
     version='0.1',
     url='https://github.com/richard-to/dashgourd',
     author='Richard To',
+    packages=['dashgourd'],
     install_requires=[
         'pymongo',
         'MySQL-python'
