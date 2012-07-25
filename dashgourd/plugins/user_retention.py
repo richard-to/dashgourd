@@ -1,4 +1,6 @@
 import math
+from datetime import datetime
+from dateutil import relativedelta
 from bson.code import Code
 
 def create_user_retention(db, collection, options):
@@ -171,58 +173,66 @@ def create_user_retention(db, collection, options):
         out={'replace' : collection}, 
         finalize=finalizer, query=query)
     
-def format_user_retention(data, dates_max=None, interval_max=None):
+def format_user_retention(results, title=None):
     """Formats user retention data for output
 
-    Currently does not support additional groupings
-    like date+gender. Mainly seems unreasonable to do.
-    
-    Better creating separate retention charts for male/female 
-    in this case.
-    
-    This is geared more for output in html. Can also send data 
-    as JSON using python json library.
+    Data is now formatted for the Google Visualization Api python lib.
+
+    `title` Title of chart
+    `data` is list of data in rows
+    `description` is a dictionary of all columns
+    `columns_order` is a tuple of ordered columns that you want to display.
     
     Args:
-        data:User retention data returned from monogdb
-        dates_max: Max dates to show from newest to oldest
-        interval_max: Max date intervals to show.
+        results:User retention data returned from monogdb
+        title: Chart title 
     
     Return:
-        ordered_data: Ordered data with formatted percents and css classes
+        dict: title, chart_type, data, description, columns_order
     """
     
-    ordered_data = []
-    temp_ordered_data = []
-    
-    for item in data:
-        temp_ordered_data.append(item)
-                
-        item['output'] = []
-        temp_output = []
-        
-        for key in item['value']:
-            output = {
-                'date': key,
-                'count': item['value'][key]['count'],
-                'pct': '{0:.1%}'.format(item['value'][key]['pct']),
-                'css_class': 'level_{:02.0f}'.format(math.floor(item['value'][key]['pct'] * 10))
-            }           
-            temp_output.append(output)
-            
-        temp_output.sort(key=lambda item:item['date'])
-        
-        if interval_max is not None:
-            item['output'] = temp_output[:interval_max]
-        else:
-            item['output'] = temp_output
-        
-    temp_ordered_data.sort(key=lambda item:item['_id']['created_at'])
-    if dates_max is not None:
-        ordered_data = temp_ordered_data[(dates_max*-1):]
-    else:
-        ordered_data = temp_ordered_data        
+    chart_type = 'retention_table'
+    columns_order = ['created_at']
+    description = {
+        'created_at': ('string', 'Date')
+    }
+    data = []
 
-    return ordered_data    
+    for result in results:
+        row = {
+            'created_at': result['_id']['created_at']
+        }
+        date_list = []
+        for key in result['value']:        
+            date_list.append(key)
+        date_list.sort()
+
+        count = 0
+        for key in date_list:
+            value = result['value'][key]
+
+            if count == 0:
+                col_name = 'total'
+                description[col_name] = ('number', 'Total')
+                row[col_name] = value['count']
+            else:
+                col_name = str(count)
+                description[col_name] = ('number', col_name)
+                row[col_name] = (value['pct'], '{:.1%}'.format(value['pct']))
+            
+            if col_name not in columns_order:
+                columns_order.append(col_name)
+            
+            count += 1
+            
+        data.append(row)
+
+    data.sort(key=lambda item:item['created_at'])
     
-    
+    return {
+        'title': title,
+        'chart_type': chart_type,
+        'data':data, 
+        'description':description, 
+        'columns_order': tuple(columns_order)
+    }

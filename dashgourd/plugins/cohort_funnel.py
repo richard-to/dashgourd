@@ -1,4 +1,5 @@
 from bson.code import Code
+from datetime import datetime
 import gviz_api
 
 def create_cohort_funnel(db, collection, options):
@@ -208,9 +209,10 @@ def create_cohort_funnel(db, collection, options):
                 calc_name = data['calc_name']
             else:
                 calc_name = "{}_{}".format(data['type'], data['name'])
-            value_final_list.append({'name': calc_name, 'type':data['type'], 'total':data['name'], 'by':data['by']})    
+            value_final_list.append({'name': calc_name, 'type':data['type']})    
                            
-            finalize_calc = "if(value.{total}.value != 0){{value.{calc_name}.value = value.{total}.value/value.{by}.value;}}".format(
+            finalize_calc = ("if(value.{by}.value != 0){{value.{calc_name}.value = value.{total}.value/value.{by}.value; " +
+                "value.{calc_name}.total = value.{total}.value; value.{calc_name}.by = value.{by}.value;}}").format(
                 by=data['by'], calc_name=calc_name, total=data['name'])
             value_final_calc.append(finalize_calc)
      
@@ -229,7 +231,7 @@ def create_cohort_funnel(db, collection, options):
     
     out_reduce_sum = " ".join(["result.{v}.value += value.{v}.value;".format(v=value) for value in value_list])
     
-    out_final_values_init = " ".join(["value.{name} = {{ value:0, type: '{type}', 'total': '{total}', 'by': '{by}' }};".format(
+    out_final_values_init = " ".join(["value.{name} = {{ value:0, type: '{type}', 'total': 0, 'by': 0 }};".format(
         **value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
         
@@ -257,6 +259,10 @@ def format_cohort_funnel(results, fields, order=None, max_groups=None):
     
     Data is formatted using the Google Visualization Api python library
     
+    `data` is list of data in rows
+    `description` is a dictionary of all columns
+    `columns_order` is a tuple of ordered columns that you want to display.
+        
     Args:
         results: Dict returned from pymongo.
         fields: List of dicts that describe which fields to format.
@@ -329,22 +335,21 @@ def format_cohort_funnel(results, fields, order=None, max_groups=None):
     
     return {'data':data, 'description':description}
 
-def format_abtest(results, fields, order=None, max_groups=None):
+def format_abtest(results, title, fields, order=None):
     """Formats data for ab test
-    
-    Wrapper for `format_cohort_funnel` but provides net change
-    calculation from control.
     
     Args:
         results: Dict returned from pymongo.
+        title: Title of chart
         fields: List of dicts that describe which fields to format.
         order: List of dict group keys and order direction. None will use default order.
-        max_groups: Amount of data to return. Important for date cohorts mainly.
         
     Returns:
-        data: Dict of data list and description of table schema    
+        dict: title, chart_type, data, description, columns_order   
     """
-
+    
+    chart_type = 'ab_table'
+    
     change_formats = {
         'total': '{:+}',
         'avg': '{:+.2}',
@@ -362,7 +367,8 @@ def format_abtest(results, fields, order=None, max_groups=None):
     data_key = {}
     variations = []
     description['metric'] = ("string", "Metric")
-    description['change'] = ("string", "% Change")
+    
+    columns_order = ['metric'] 
 
     for result in results:
         
@@ -393,7 +399,11 @@ def format_abtest(results, fields, order=None, max_groups=None):
             if calc_type == 'total':
                 row[variation] = int(value[name]['value'])
             else:
-                row[variation] = (value[name]['value'], data_format.format(value[name]['value']))
+                display = '<span class="subtext">({}/{})</span> {}'.format(
+                    int(value[name]['total']),
+                    int(value[name]['by']), 
+                    data_format.format(value[name]['value']))
+                row[variation] = (value[name]['value'], display)
 
             
             if order is None:
@@ -405,15 +415,115 @@ def format_abtest(results, fields, order=None, max_groups=None):
     for key in data_key:
         idx = data_key[key]['idx']
         calc_type = data_key[key]['calc_type']
-        data_format = field.get('format', change_formats[calc_type])
+        data_format = field.get('format', change_formats['pct'])
         row = data[idx]   
         for variation in variations:
             change_key = "change_{}".format(variation)
             
             if calc_type == 'total':
-                row[change_key] = row[variation] - row[control]
+                if row[control] != 0:
+                    change = (row[variation] / float(row[control])) - 1.0
+                else:
+                    change = 0
             else:
-                change = row[variation][0] - row[control][0]
-                row[change_key] = (change, data_format.format(change))
+                if row[control][0] != 0:
+                    change = (row[variation][0] / row[control][0]) - 1
+                else:
+                    change = 0
+            
+            row[change_key] = (change, data_format.format(change))
+            
+            if variation not in columns_order:
+                columns_order.append(variation)
+                if row[variation] != row[control]:
+                    columns_order.append(change_key)
 
-    return {'data':data, 'description':description}
+    return {
+        'title': title,
+        'chart_type': chart_type,
+        'data':data, 
+        'description':description,
+        'columns_order': tuple(columns_order)
+    }
+    
+    
+def format_chart(results, title, fields, x_axis=None, group=None):
+    """Formats data for line/bar/area charts
+    
+    Args:
+        results: Dict returned from pymongo.
+        title: Title of chart
+        fields: List of dicts that describe which fields to format.
+        order: List of dict group keys and order direction. None will use default order.
+        columns_order: Tuple of columns to show
+        
+    Returns:
+        dict: title, chart_type, data, description, columns_order    
+    """
+    
+    chart_type = 'line_chart'
+
+    default_formats = {
+        'total': '{}',
+        'avg': '{:.2}',
+        'pct': '{:.1%}'
+    }
+        
+    description = {}    
+    data = []
+    data_key = {}
+    description['date'] = ("date", "Date")
+
+    columns_order = ['date']
+    
+    single_field = True if len(fields) == 1 else False
+    
+    for result in results:
+        
+        key = result['_id'][x_axis];
+        
+        prefix = None
+        if group is not None and group in result['_id']:
+            prefix = result['_id'][group]
+                        
+        value = result['value']
+        
+        for field in fields:
+            
+            name = field['name']
+            
+            if prefix is None:
+                line_name = name
+                label = field.get('label', name.replace('_', ' ').title())
+            elif single_field:
+                line_name = prefix
+                label = line_name.title()
+            else:
+                line_name = "{}_{}".format(prefix, name)
+                label = " ".join([prefix, field.get('label', name.replace('_', ' ').title())])
+            
+            if key not in data_key:
+                dt = datetime.strptime(key, '%Y/%m/%d')
+                data_key[key] = {'idx': len(data)}
+                row = {'date': dt}
+                data.append(row)
+            else:
+                row = data[data_key[key]['idx']]
+            
+            if line_name not in description:
+                columns_order.append(line_name)
+                description[line_name] = ("number", label)
+            
+            calc_type = value[name]['type']
+            data_format = field.get('format', default_formats[calc_type])
+            data_value = value[name]['value']*100 if calc_type == 'pct' else value[name]['value']
+            row[line_name] = (
+                data_value, data_format.format(value[name]['value']))
+
+    return {
+        'title': title,
+        'chart_type': chart_type,
+        'data':data, 
+        'description':description,
+        'columns_order': tuple(columns_order)
+    }    
