@@ -7,6 +7,6 @@ setup(
     author='Richard To',
     install_requires=[
         'pymongo',
-        'MySQLdb'
+        'MySQL-python'
     ]	
 )
