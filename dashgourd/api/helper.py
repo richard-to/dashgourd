@@ -17,7 +17,7 @@ def get_mongodb_db():
     
     connection = Connection(
         os.environ.get('MONGO_HOST', 'localhost'), 
-        os.environ.get('MONGO_PORT', 27017))
+        int(os.environ.get('MONGO_PORT', 27017)))
     mongo_db = connection[os.environ.get('MONGO_DB')]
     
     mongo_user = os.environ.get('MONGO_USER')
