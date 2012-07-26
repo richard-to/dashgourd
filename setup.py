@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='DashGourd',
-    version='0.1',
+    version='0.1.1',
     url='https://github.com/richard-to/dashgourd',
     author='Richard To',
     platforms='any',
