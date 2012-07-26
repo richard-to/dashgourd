@@ -24,7 +24,7 @@ def get_mongodb_db():
     mongo_pass = os.environ.get('MONGO_PASS')
     
     if mongo_user is not None and mongo_pass is not None:
-        mongo_db.authenticate()
+        mongo_db.authenticate(mongo_user, mongo_pass)
     
     return mongo_db
 
