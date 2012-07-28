@@ -1,14 +1,21 @@
 import re
+from dashgourd.api.helper import init_mongodb
 
 class ActionsApi(object):
     """Api for handling users/actions
     
     Attributes:
-        mongodb_db: Connected/Authenticated pymongo db object
+        mongodb: MongoDb db or Mongodb connection string
+        dbname: If passing in connection string, dbname is needed
     """
     
-    def __init__(self, mongodb_db):
-        self.db = mongodb_db
+    def __init__(self, mongodb, dbname=None):
+        
+        if type(mongodb) is str:
+            self.db = init_mongodb(mongodb, dbname)
+        else:
+            self.db = mongodb
+            
         self.label_re = re.compile('[^a-z0-9_]')
             
     def create_user(self, data):
@@ -29,7 +36,7 @@ class ActionsApi(object):
             data['ab'] = {}
             self.db.users.insert(data)
                        
-    def insert_action(self, data):
+    def insert_action(self, user_id, data):
         """Logs a user action
         
         Actions that have not been logged in the db
@@ -49,36 +56,32 @@ class ActionsApi(object):
         
         
         Args:
-            data: Dict that contains `user_id`, `name`, and `created_at` keys
+            user_id: Id of user
+            data: Dict that contains at least `name`, and `created_at` keys
         """        
         
-        if ('user_id' in data and 
-            'name' in data and 
-            'created_at' in data):
-            
-            user_id = data['user_id']
-            del data['user_id']
-            
+        if ('name' in data and 
+            'created_at' in data):            
             self.db.users.update({ 'user_id':user_id }, { '$push': { 'actions': data } })
     
-    def tag_abtest(self, data): 
+    def tag_abtest(self, user_id, data): 
         """Tags as a user as being part of an ab test
         
         Ab tests are stored on the user object as a dictionary.
         
         Args:
-            data: Dict that contains `user_id` `abtest` `variation`
+            user_id: User id of user
+            data: Dict that contains `abtest` `variation`
         """
         
-        if ('user_id' in data and 
-            'abtest' in data and 
+        if ('abtest' in data and 
             'variation' in data):
             
             abtest = ".".join(['ab', data['abtest']])
             self.db.users.update(
-                { 'user_id': data['user_id'] }, 
+                { 'user_id': user_id }, 
                 { '$set': { abtest: data['variation'] } })
-                    
+          
     def register_action(self, name, label=None):
         """Registers an action type into the actions collection.
         

@@ -1,6 +1,5 @@
 from bson.code import Code
 from datetime import datetime
-import gviz_api
 
 def create_cohort_funnel(db, collection, options):
     """Creates data for cohort funnels or plain funnels
