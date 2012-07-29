@@ -434,7 +434,7 @@ def format_abtest(results, title, fields, order=None):
             
             if variation not in columns_order:
                 columns_order.append(variation)
-                if row[variation] != row[control]:
+                if variation != control:
                     columns_order.append(change_key)
 
     return {
