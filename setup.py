@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='DashGourd',
+    name='Dashgourd',
     version='0.2.1',
     url='https://github.com/richard-to/dashgourd',
     author='Richard To',
