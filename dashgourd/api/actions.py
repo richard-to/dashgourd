@@ -4,6 +4,7 @@ from dashgourd.api.helper import init_mongodb
 class ActionsApi(object):
     """Api for handling users/actions
     
+    
     Attributes:
         mongodb: MongoDb db or Mongodb connection string
         dbname: If passing in connection string, dbname is needed
@@ -27,6 +28,10 @@ class ActionsApi(object):
         
         When creating a user, no actions can be included yet.
         
+        Make sure all created_at dates are converted to UTC before 
+        inserting into database. Otherwise your dates will be converted 
+        based on system timezone, which is not always ideal.
+                
         Args:
             data: Dict that contains at least an `user_id` key
         """
@@ -46,9 +51,8 @@ class ActionsApi(object):
         
         `type` is basically the slug name of the action.
         
-        It is important to keep these slugs short. 
-        The slug will be formatted to a more readable format or can be 
-        overridden on the actions table list table.
+        See create_user method for details on why created_at fields 
+        should be converted to UTC beforehand.
         
         Example: `user_registered` would become `User Registered`
         
