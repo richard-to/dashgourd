@@ -17,7 +17,7 @@ class ActionsApi(object):
             self.db = mongodb
             
         self.label_re = re.compile('[^a-z0-9_]')
-            
+       
     def create_user(self, data):
         """Creates a new user in DashGourd
         
@@ -80,29 +80,4 @@ class ActionsApi(object):
             abtest = ".".join(['ab', data['abtest']])
             self.db.users.update(
                 { 'user_id': user_id }, 
-                { '$set': { abtest: data['variation'] } })
-          
-    def register_action(self, name, label=None):
-        """Registers an action type into the actions collection.
-        
-        The purpose of register action is mainly for the client 
-        functionality. We may not actually need this.
-            
-        The action type will only be created if it does not exist.
-        If no label is included with the action, a generic one 
-        is generated from the `name` value by title-casing replacing 
-        underscores with spaces.
-        
-        The action type should be in lowercase letters and contain no spaces.
-        Digits and underscores are also allowed.
-        
-        Args:
-            name: Name of the action
-        """
-         
-        formatted_name = self.label_re.sub('',name.lower())
-        if formatted_name:
-            if not label:
-                label = formatted_name.replace('_', ' ', ).title()
-            self.db.actions.update({"name": formatted_name}, 
-                {"name": formatted_name, 'label': label}, True)          
+                { '$set': { abtest: data['variation'] } })       
