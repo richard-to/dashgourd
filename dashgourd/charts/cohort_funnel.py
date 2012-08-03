@@ -18,23 +18,7 @@ def create_cohort_funnel(db, collection, options):
             query: Mongo db query to select rows to operate on
             group: List of dicts to define how data is grouped
             calc: List of dicts to define how to calculate data
-    
-    Example:
-    
-    query = {"gender": "Male", "actions": { "$exists": True}}
-    
-    group = [
-        {'meta': 'created_at', 'type': 'monthly'}  
-    ]
-    
-    calc = [
-        {"type":"avg", "action":"listened_song"},
-        {"type":"pct", "action":"listened_song"},
-        {"type":"avg", "action":"bought_song"},
-        {"type":"pct", "action":"bought_song", cond: {type:"at_least", value: 1}},
-        {"type":"avg", "action":"listened_song", "meta": "time", "by":"listened_song"}    
-    ]
-    
+
     TODO(richard-to): Error check options more thoroughly
     TODO(richard-to): Option to print generated functions instead of running them.
     TODO(richard-to): Add option to do merge, reduce or replace for map reduce.
@@ -66,12 +50,18 @@ def create_cohort_funnel(db, collection, options):
             {init_values}
         }}
         
+        var temp_values = {{}}
+
         {init_emit_key}
+
+        {attrib_values}
 
         this.actions.forEach(function(z){{
             {map_values}                       
         }});
         
+        {bucket_values}
+
         {adjust_values}
         
         emit({{ {emit_key} }}, values);        
@@ -108,9 +98,13 @@ def create_cohort_funnel(db, collection, options):
     accepted_conditions = {
         'at_least': '>=',
         'at_most': '<=',
-        'exactly': '=='
+        'exactly': '==',
+        'bucket': ''
     }
-            
+    
+    attrib_list = []
+
+    temp_value_list = []
     value_list = []
     value_map_dict = {}
     value_map_list = []
@@ -122,6 +116,8 @@ def create_cohort_funnel(db, collection, options):
     group_keys = []
     group_init_list = []
     
+    bucket_cond_list = []  
+
     for value in group:
         
         if 'type' not in value or value['type'] == 'value':
@@ -141,28 +137,30 @@ def create_cohort_funnel(db, collection, options):
     
         if 'name' not in data:
             
-            if type(data['action']) is list:
+            if "attrib" in data:
+                action_name = data['action']
+            elif type(data['action']) is list:
                 action_name = "_or_".join(data['action'])
             else:
                 action_name = data['action']
             
+            cond = {
+                'type': "total",
+                'value': 1
+            }
+            
+            if type(data.get('cond')) is dict:
+                if data['cond'].get('type') in accepted_conditions:
+                    cond['type'] = data['cond']['type']
+                
+                if  data['cond'].get('value') is not None:
+                    cond['value'] = data['cond']['value']
+
+            data['cond'] = cond
+
             if data['type'] == 'pct': 
-                
-                cond = {
-                    'type': "total",
-                    'value': 1
-                }
-                
-                if type(data.get('cond')) is dict:
-                    if data['cond'].get('type') in accepted_conditions:
-                        cond['type'] = data['cond']['type']
-                    
-                    if  data['cond'].get('value') is not None:
-                        cond['value'] = data['cond']['value']
-                
-                data['cond'] = cond
-                
-                if data['cond']['type'] != 'total':               
+                            
+                if data['cond']['type'] != 'total' and data['cond']['type'] != 'bucket':               
                     data['name'] = "{}_{}_{}_{}".format(
                         'has', data['cond']['type'], data['cond']['value'], action_name)
                 else:
@@ -176,25 +174,60 @@ def create_cohort_funnel(db, collection, options):
         if data['name'] not in value_list:    
             value_list.append(data['name'])
                 
-
-        if 'meta' in data:
+        if "attrib" in data:
+            code = "temp_values.{name} = this.{name}; ".format(name=data['name'])
+        elif 'meta' in data:
             code = "if(z.{m} != undefined){{ values.{n}.value += z.{m}; }}".format(m=data['meta'], n=data['name'])
         else:
             code = "values.{}.value++;".format(data['name'])
         
-            
-        if type(data['action']) is list:
-            action_list = data['action']
+        if "attrib" in data:    
+            attrib_list.append(code)
         else:
-            action_list = [data['action']]
+            if type(data['action']) is list:
+                action_list = data['action']
+            else:
+                action_list = [data['action']]
+            
+            for action in action_list:       
+                if action not in value_map_dict:
+                    value_map_dict[action] = {}
+                                       
+                value_map_dict[action][data['name']] = code
         
-        for action in action_list:       
-            if action not in value_map_dict:
-                value_map_dict[action] = {}
-                                   
-            value_map_dict[action][data['name']] = code
-        
-        if data['type'] == 'pct' and data['cond']['type'] != 'total':                
+        if data['cond']['type'] == 'bucket':
+            
+            for bucket in data['cond']['value']:
+
+                if type(bucket) is str:
+                    
+                    if data['name'] not in temp_value_list:    
+                        temp_value_list.append(data['name'])
+
+                    value_list.append("{name}_{bucket}".format(name=data['name'], bucket=bucket))
+                    bucket_cond = ("if(temp_values.{name} == '{bucket}'){{ " +
+                        "values.{name}_{clean_bucket}.value = 1; " + 
+                        "}}").format(name=data['name'], bucket=bucket, clean_bucket=bucket)
+                elif type(bucket) is int:
+                    value_list.append("{name}_{bucket}".format(name=data['name'], bucket=bucket))
+                    bucket_cond = ("if(values.{name}.value == {bucket}){{ " +
+                        "values.{name}_{bucket}.value = 1; " + 
+                        "}}").format(name=data['name'], bucket=bucket)
+                elif len(bucket) == 2 and bucket[1] is None:
+                    value_list.append("{name}_{min}_plus".format(
+                        name=data['name'], min=bucket[0]))
+                    bucket_cond = ("if(values.{name}.value >= {min}){{ " +
+                        "values.{name}_{min}_plus.value = 1; " + 
+                        "}}").format(name=data['name'], min=bucket[0])
+                else:
+                    value_list.append("{name}_{min}_to_{max}".format(
+                        name=data['name'],  min=bucket[0], max=bucket[1]))
+                    bucket_cond = ("if(values.{name}.value >= {min} && values.{name}.value <= {max}){{ " +
+                        "values.{name}_{min}_to_{max}.value = 1;" + 
+                        "}}").format(name=data['name'], min=bucket[0], max=bucket[1])
+                bucket_cond_list.append(bucket_cond)
+
+        elif data['type'] == 'pct' and data['cond']['type'] != 'total' and data['cond']['type'] != 'bucket':              
             cond_code = ("values.{name}.value = (values.{name}.value {op} {value}) ? 1 : 0; ").format(
                 name=data['name'], op=accepted_conditions[data['cond']['type']], value=data['cond']['value'])
             value_adjust_list.append(cond_code)
@@ -203,18 +236,34 @@ def create_cohort_funnel(db, collection, options):
             
             if 'by' not in data:
                 data['by'] = 'count'
-                            
-            if 'calc_name' in data:
-                calc_name = data['calc_name']
+            
+            if data['cond']['type'] == 'bucket':
+                for bucket in data['cond']['value']:
+
+                    if type(bucket) is str:
+                        bucket_name = "{name}_{bucket}".format(name=data['name'], bucket=bucket)
+                        calc_name = "{}_{}".format(data['type'], bucket_name)
+                        value_final_list.append({'name': calc_name, 'type':data['type']})    
+                                       
+                        finalize_calc = ("if(value.{by}.value != 0){{value.{calc_name}.value = value.{total}.value/value.{by}.value; " +
+                            "value.{calc_name}.total = value.{total}.value; value.{calc_name}.by = value.{by}.value;}}").format(
+                            by=data['by'], calc_name=calc_name, total=bucket_name)
+                        value_final_calc.append(finalize_calc)            
             else:
-                calc_name = "{}_{}".format(data['type'], data['name'])
-            value_final_list.append({'name': calc_name, 'type':data['type']})    
-                           
-            finalize_calc = ("if(value.{by}.value != 0){{value.{calc_name}.value = value.{total}.value/value.{by}.value; " +
-                "value.{calc_name}.total = value.{total}.value; value.{calc_name}.by = value.{by}.value;}}").format(
-                by=data['by'], calc_name=calc_name, total=data['name'])
-            value_final_calc.append(finalize_calc)
-     
+                if 'calc_name' in data:
+                    calc_name = data['calc_name']
+                else:
+                    calc_name = "{}_{}".format(data['type'], data['name'])
+                value_final_list.append({'name': calc_name, 'type':data['type']})    
+                               
+                finalize_calc = ("if(value.{by}.value != 0){{value.{calc_name}.value = value.{total}.value/value.{by}.value; " +
+                    "value.{calc_name}.total = value.{total}.value; value.{calc_name}.by = value.{by}.value;}}").format(
+                    by=data['by'], calc_name=calc_name, total=data['name'])
+                value_final_calc.append(finalize_calc)
+    
+    for value in temp_value_list:
+        value_list.remove(value)
+
     for action in value_map_dict:
         code = " ".join(value_map_dict[action].values())    
         cond = "if(z.name == '{}'){{ {} }}".format(action, code)      
@@ -225,7 +274,12 @@ def create_cohort_funnel(db, collection, options):
 
     out_values_init = ", ".join(["{}: {{ value: 0, type:'total' }}".format(value) for value in value_list])
     out_value_map = " else ".join(value_map_list)
-    
+
+    out_values_init = ", ".join(["{}: {{ value: 0, type:'total' }}".format(value) for value in value_list])
+    out_attrib_values = " ".join(attrib_list)
+
+    out_values_bucket = " else ".join(bucket_cond_list)
+
     out_values_adjust = " ".join(value_adjust_list)
     
     out_reduce_sum = " ".join(["result.{v}.value += value.{v}.value;".format(v=value) for value in value_list])
@@ -233,12 +287,28 @@ def create_cohort_funnel(db, collection, options):
     out_final_values_init = " ".join(["value.{name} = {{ value:0, type: '{type}', 'total': 0, 'by': 0 }};".format(
         **value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
-        
+    
+    print mapper_template.format(
+        emit_key=out_group_key, 
+        init_emit_key=out_group_init_list,
+        init_values=out_values_init,
+        attrib_values=out_attrib_values,
+        map_values=out_value_map,
+        bucket_values=out_values_bucket,
+        adjust_values=out_values_adjust)
+
+    print reducer_template.format(out_values_init, out_reduce_sum)
+
+    print finalizer_template.format(
+        out_final_values_init, out_final_values_calc)
+
     mapper = Code(mapper_template.format(
         emit_key=out_group_key, 
         init_emit_key=out_group_init_list,
         init_values=out_values_init,
+        attrib_values=out_attrib_values,
         map_values=out_value_map,
+        bucket_values=out_values_bucket,
         adjust_values=out_values_adjust))
     reducer = Code(reducer_template.format(out_values_init, out_reduce_sum))        
     finalizer = Code(finalizer_template.format(
@@ -269,24 +339,7 @@ def format_cohort_funnel(results, fields, order=None, max_groups=None):
         max_groups: Amount of data to return. Important for date cohorts mainly.
         
     Returns:
-        vis_data: Data formatted for visualisation
-
-
-    Example:
-    
-        fields = [
-            {'name': 'count', 'label': 'Total Users'},
-            {'name': 'avg_purchased_cds'},
-            {'name': 'pct_has_purchased_cds'}      
-        ]
-        
-        or explicitly setting format:
-        
-        fields = [
-            {'name': 'count', 'format': '{}', 'label': 'Total Users'},
-            {'name': 'avg_purchased_cds', 'format': '{:.2}', 'label': 'Avg Purchased Cds'},
-            {'name': 'pct_has_purchased_cds', 'format': '{:.1%}'}      
-        ]        
+        vis_data: Data formatted for visualisation     
     """ 
     
     default_formats = {
@@ -446,7 +499,7 @@ def format_abtest(results, title, fields, order=None):
     }
     
     
-def format_chart(results, title, fields, x_axis=None, group=None):
+def format_chart(results, title, fields, x_axis=None, group=None, chart_type="line"):
     """Formats data for line/bar/area charts
     
     Args:
@@ -460,8 +513,6 @@ def format_chart(results, title, fields, x_axis=None, group=None):
         dict: title, chart_type, data, description, columns_order    
     """
     
-    chart_type = 'line_chart'
-
     default_formats = {
         'total': '{}',
         'avg': '{:.2}',
@@ -518,7 +569,7 @@ def format_chart(results, title, fields, x_axis=None, group=None):
             
             if calc_type == 'pct':
                 data_value = value[name]['value']*100
-                chart_type = 'pct_line_chart'
+                chart_type = "pct_line"
             else:
                 data_value = value[name]['value']
 

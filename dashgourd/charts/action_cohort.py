@@ -268,7 +268,8 @@ def create_action_cohort(db, collection, options):
             value_final_calc.append(finalize_calc)
     
     code = " ".join(["values[z.{}].count.value = 1; ".format(event_meta), event_group_init])
-    cond = "if(z.name == '{}'){{ {} }}".format(event_group['action'], code)
+    event_group_action_cond = " || ".join(["z.name == '{}'".format(action) for action in event_group['action']])
+    cond = "if({}){{ {} }}".format(event_group_action_cond, code)
     value_map_list.append(cond)
     
     for action in value_map_dict:
@@ -293,7 +294,7 @@ def create_action_cohort(db, collection, options):
     out_final_values_init = " ".join(["value.{name} = {{ value:0, type: '{type}', 'total': '{total}', 'by': '{by}' }};".format(
         **value) for value in value_final_list])
     out_final_values_calc = " ".join(value_final_calc)
-                        
+
     mapper = Code(mapper_template.format(
         emit_key=out_group_key, 
         init_emit_key=out_group_init_list,
