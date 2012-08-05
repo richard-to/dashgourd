@@ -1,7 +1,7 @@
 from dashgourd.api.helper import init_mongodb
-from dashgourd.charts.cohort_funnel import create_cohort_funnel
-from dashgourd.charts.user_retention import create_user_retention
-from dashgourd.charts.action_cohort import create_action_cohort
+from dashgourd.charts.cohort_funnel import CohortFunnel
+from dashgourd.charts.retention import Retention
+from dashgourd.charts.action_cohort import ActionCohort
 
 class ChartsApi(object):
     """Api for charts.
@@ -23,9 +23,10 @@ class ChartsApi(object):
         
         if plugins is None:
             self.plugins = {
-                'cohort_funnel':create_cohort_funnel,
-                'user_retention':create_user_retention,
-                'action_cohort':create_action_cohort}
+                'cohort_funnel':CohortFunnel(),
+                'action_cohort': ActionCohort(),
+                'retention': Retention()
+            }
         else:
             self.plugins = plugins
       
@@ -52,7 +53,7 @@ class ChartsApi(object):
         """Generates chart based on plugin.
         
         This method is basically a wrapper for plugins.
-        Plugin functions should be usable directly.
+        Plugin functions can be used directly.
         
         Does not check what options are passed into plugin.
         Plugin needs to check that expected values are passed in.
@@ -72,6 +73,6 @@ class ChartsApi(object):
         
         plugin = self.plugins.get(plugin)
         if plugin is not None:
-            return plugin(self.db, collection, options)
+            return plugin.run(self.db, collection, options)
         else:
             return False

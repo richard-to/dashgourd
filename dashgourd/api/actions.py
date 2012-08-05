@@ -1,4 +1,3 @@
-import re
 from dashgourd.api.helper import init_mongodb
 
 class ActionsApi(object):
@@ -16,8 +15,6 @@ class ActionsApi(object):
             self.db = init_mongodb(mongodb, dbname)
         else:
             self.db = mongodb
-            
-        self.label_re = re.compile('[^a-z0-9_]')
        
     def create_user(self, data):
         """Creates a new user in DashGourd
