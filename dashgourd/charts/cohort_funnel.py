@@ -172,11 +172,10 @@ class CohortFunnel(object):
                 set_emit_keys.append(emit_key_part)                   
         return set_emit_keys
 
-    def build_init_emit_keys(self, group):        
-        init_emit_keys = []
-        
+    def build_init_emit_keys(self, group, init_emit_keys=[]):        
+
         for data in group:
-            if data['type'] == 'user':
+            if data['type'] == 'user' or data['type'] == 'ab':
                 init_emit_keys.append("{a}:{a}".format(a=data['attr']))
         
         return init_emit_keys
@@ -185,7 +184,6 @@ class CohortFunnel(object):
         validated_calc = []
         
         default_type = 'action'
-        default_cond = {'type': 'sum', 'value': 1}
 
         for data in calc:
             
@@ -197,7 +195,7 @@ class CohortFunnel(object):
 
             if data['calc'] == 'pct': 
 
-                cond = default_cond
+                cond = {'type': 'sum', 'value': 1}
                 if type(data.get('cond')) is dict:
                     if data['cond'].get('type') in self.accepted_conditions:
                         cond['type'] = data['cond']['type']

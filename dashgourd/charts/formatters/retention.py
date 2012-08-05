@@ -23,11 +23,11 @@ class FormatRetention(object):
                 if count == 0:
                     col_name = 'total'
                     description[col_name] = ('number', 'Total')
-                    row[col_name] = value['count']
+                    row[col_name] = value['total']
                 else:
                     col_name = str(count)
                     description[col_name] = ('number', col_name)
-                    row[col_name] = (value['pct']['value'], '{:.1%}'.format(value['pct']))
+                    row[col_name] = (value['pct']['value'], '{:.1%}'.format(value['pct']['value']))
                 
                 if col_name not in columns_order:
                     columns_order.append(col_name)

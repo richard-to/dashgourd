@@ -1,4 +1,4 @@
-from dashgourd.charts.formatters import FormatHelper
+from dashgourd.charts.formatters.helper import FormatHelper
 
 class FormatAb(object):
 
@@ -8,12 +8,12 @@ class FormatAb(object):
         self.change_formats = self.helper.change_formats
         self.default_formats = self.helper.default_formats
 
-    def build(self, results, fields)
+    def build(self, results, fields):
 
         data = []
         data_key = {}
         description = {}
-        columns_order []
+        columns_order = []
         
         variations = []
 
@@ -48,31 +48,31 @@ class FormatAb(object):
 
         control = variations[0]
         for key in data_key:
-            idx = data_key[key['idx']]
+            idx = data_key[key]['idx']
             calc_type = data_key[key]['calc_type']
-            data_format = field.get('format', change_formats['pct'])
+            data_format = field.get('format', self.change_formats['pct'])
             
             row = data[idx]
             for variation in variations:
-            change_key = "change_{}".format(variation)
-            
-            if calc_type == 'sum':
-                if row[control] != 0:
-                    change = (row[variation] / float(row[control])) - 1.0
+                change_key = "change_{}".format(variation)
+                
+                if calc_type == 'sum':
+                    if row[control][0] != 0:
+                        change = (row[variation][0] / float(row[control][0])) - 1.0
+                    else:
+                        change = 0
                 else:
-                    change = 0
-            else:
-                if row[control][0] != 0:
-                    change = (row[variation][0] / row[control][0]) - 1
-                else:
-                    change = 0
-            
-            row[change_key] = (change, data_format.format(change))
-            
-            if variation not in columns_order:
-                columns_order.append(variation)
-                if variation != control:
-                    columns_order.append(change_key)
+                    if row[control][0] != 0:
+                        change = (row[variation][0] / row[control][0]) - 1
+                    else:
+                        change = 0
+                
+                row[change_key] = (change, data_format.format(change))
+                
+                if variation not in columns_order:
+                    columns_order.append(variation)
+                    if variation != control:
+                        columns_order.append(change_key)
 
         return {
             'data':data, 

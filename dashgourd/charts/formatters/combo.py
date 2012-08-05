@@ -1,5 +1,5 @@
 from datetime import datetime
-from dashgourd.charts.formatters import FormatHelper
+from dashgourd.charts.formatters.helper import FormatHelper
 
 class FormatCombo(object):
 
@@ -8,12 +8,12 @@ class FormatCombo(object):
         self.helper = FormatHelper()
         self.default_formats = self.helper.default_formats
 
-    def build(self, results, fields, split, group):
+    def build(self, results, fields, group, split=None):
         
         data = []
         data_key = {}
         description = {}
-        columns_order []
+        columns_order = []
 
         single_field = True if len(fields) == 1 else False
         
@@ -24,7 +24,7 @@ class FormatCombo(object):
         description[group_name] = (group_data_type, group_label) 
         columns_order = [group_name]
 
-        for results in result:
+        for result in results:
             
             key = result['_id'][group_name]
             prefix = result['_id'].get(split, None)

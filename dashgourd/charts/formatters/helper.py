@@ -1,15 +1,15 @@
+
 class FormatHelper(object):
 
-	def __init__(self):
-        
+    def __init__(self):
         self.change_formats = {
-            'total': '{:+}',
+            'sum': '{:+}',
             'avg': '{:+.2}',
             'pct': '{:+.1%}'
         }
             
         self.default_formats = {
-            'total': '{}',
+            'sum': '{}',
             'avg': '{:.2}',
             'pct': '{:.1%}'
         }
@@ -31,16 +31,16 @@ class FormatHelper(object):
         return (int(value), data_format.format(value))
 
     def format_avg(self, meta, data_format):
-        display = show_calc(
+        display = self.show_calc(
             meta['value'], meta['total'], meta['n'], data_format)
         return (meta['value'], display)
     
     def format_pct(self, meta, data_format):
         data_value = meta['value']*100
-        display = show_calc(
+        display = self.show_calc(
             meta['value'], meta['total'], meta['n'], data_format)
         return (data_value, display)
         
     def show_calc(self, value, total, n, data_format):
-        return = '<span class="subtext">({}/{})</span> {}'.format(
+        return '<span class="subtext">({}/{})</span> {}'.format(
             int(total), int(n), data_format.format(value))

@@ -1,5 +1,5 @@
 from datetime import datetime
-from dashgourd.charts.formatters import FormatHelper
+from dashgourd.charts.formatters.helper import FormatHelper
 
 class FormatTable(object):
     
