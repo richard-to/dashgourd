@@ -5,7 +5,7 @@ class FormatTable(object):
     
     def __init__(self):
         
-        self.helper = FormatHelper()
+        self.helper = FormatHelper(True)
         self.default_formats = self.helper.default_formats
 
     def build(self, results, fields, row_order=None):
@@ -15,7 +15,7 @@ class FormatTable(object):
         columns_order = []
         
         for field in fields:
-            label = field.get('label', name.replace('_', ' ').title())
+            label = field.get('label', field['name'].replace('_', ' ').title())
             data_type = field.get('data_type', 'number')
             description[field['name']] = (data_type, label)
         
@@ -41,18 +41,18 @@ class FormatTable(object):
 
                 if is_key_col:
                      data_type = field.get('data_type', 'number')
-                     value = result['_id'][name]
+                     key_value = result['_id'][name]
                      
                      if data_type == 'date':
-                        value = datetime.strptime(value, '%Y/%m/%d')
-                     row[name] = value
+                        key_value = datetime.strptime(key_value, '%Y/%m/%d')
+                     row[name] = key_value
                 else:                
-                    row[name] = self.format(value[name], data_format)
+                    row[name] = self.helper.format(value[name], field)
 
             data.append(row)
 
         for col in reversed(row_order):
-            data.sort(key=lambda item:item[col['name']], reverse=group.get('reverse', False))
+            data.sort(key=lambda item:item[col['name']], reverse=col.get('reverse', False))
         
         return {
             'data':data, 

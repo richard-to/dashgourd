@@ -4,7 +4,7 @@ class FormatAb(object):
 
     def __init__(self):
         
-        self.helper = FormatHelper()
+        self.helper = FormatHelper(True)
         self.change_formats = self.helper.change_formats
         self.default_formats = self.helper.default_formats
 

@@ -1,7 +1,9 @@
 
 class FormatHelper(object):
 
-    def __init__(self):
+    def __init__(self, allow_html=False):
+
+        self.allow_html = allow_html
         self.change_formats = {
             'sum': '{:+}',
             'avg': '{:+.2}',
@@ -42,5 +44,8 @@ class FormatHelper(object):
         return (data_value, display)
         
     def show_calc(self, value, total, n, data_format):
-        return '<span class="subtext">({}/{})</span> {}'.format(
+        display = '({}/{}) {}'    
+        if self.allow_html:
+            display = '<span class="subtext">({}/{})</span> {}'
+        return display.format(
             int(total), int(n), data_format.format(value))
