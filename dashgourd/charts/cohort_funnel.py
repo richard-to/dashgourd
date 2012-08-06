@@ -97,7 +97,8 @@ class CohortFunnel(object):
         set_user_values = self.build_set_user_values(calc)
         set_action_values = self.build_set_action_values(calc)       
 
-        init_values, set_bucket_values = self.build_set_range_bucket_values(calc, init_values)
+        calc, init_values, set_bucket_values = self.build_set_range_bucket_values(
+            calc, init_values)
 
         adjust_cond_values = self.build_adjust_cond_values(calc)
 
@@ -276,29 +277,44 @@ class CohortFunnel(object):
         return adjust_cond_values
 
     def build_set_range_bucket_values(self, calc, init_values=[], set_bucket_values=[]):
+        new_calc = []
         for data in calc:
             bucket = data.get('bucket', None)    
             if bucket is not None and bucket['type'] == 'range':
+
                 for value in bucket['value']:
                     if type(value) is int:
-                        init_values.append("{n}_{v}".format(n=data['name'], v=value))
+                        new_name = "{n}_{v}".format(n=data['name'], v=value)
                         cond = ("if(values.{n}.value == {v}){{ " +
                         "values.{n}_{v}.value = 1; " + 
                         "}}").format(n=data['name'], v=value)
                     elif len(value) == 2 and value[1] is None:
-                        init_values.append("{n}_{m}_plus".format(
-                            n=data['name'], m=value[0]))
+                        new_name = "{n}_{m}_plus".format(
+                            n=data['name'], m=value[0])
                         cond = ("if(values.{n}.value >= {m}){{ " +
                         "values.{n}_{m}_plus.value = 1; " + 
                         "}}").format(n=data['name'], m=value[0])
                     else:
-                        init_values.append("{n}_{m}_to_{x}".format(
-                            n=data['name'],  m=value[0], x=value[1]))
+                        new_name = "{n}_{m}_to_{x}".format(
+                            n=data['name'],  m=value[0], x=value[1])
                         cond = ("if(values.{n}.value >= {m} && values.{n}.value <= {x}){{ "
                         "values.{n}_{m}_to_{x}.value = 1;" + 
                         "}}").format(n=data['name'], m=value[0], x=value[1])
-                    set_bucket_values.append(cond)                    
-        return [init_values, set_bucket_values]         
+                    calc_config = {
+                        'calc': data['calc'], 
+                        'attr': data['attr'],
+                        'name': new_name,
+                        'n': data['n'], 
+                        'type': data['type'],
+                        'cond': data['cond']   
+                    }
+                    new_calc.append(calc_config)
+                    
+                    init_values.append(new_name)
+                    set_bucket_values.append(cond)
+
+        calc.extend(new_calc)
+        return [calc, init_values, set_bucket_values]         
 
     def build_init_final_values(self, calc, init_final_values=[]):
         for data in calc:

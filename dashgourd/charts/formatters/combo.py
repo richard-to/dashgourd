@@ -38,7 +38,14 @@ class FormatCombo(object):
                     label = field.get('label', name.replace('_', ' ').title())
                 elif single_field:
                     line_name = prefix
-                    label = line_name.title()
+                    field_label = field.get('label', None)
+                    
+                    if type(field_label) is str:
+                        label = "{} {}".format(prefix.title(), field_label)
+                    elif type(field_label) is dict and prefix in field_label:
+                        label = field_label[prefix]
+                    else:
+                        label = prefix.title()
                 else:
                     line_name = "{}_{}".format(prefix, name)
                     label = " ".join([prefix, field.get('label', name.replace('_', ' ').title())])
