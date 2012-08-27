@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='Dashgourd',
-    version='0.3.5',
+    version='0.3.8',
     url='https://github.com/richard-to/dashgourd',
     author='Richard To',
     description='Generate stats and charts from mongodb',
