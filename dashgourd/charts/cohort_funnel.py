@@ -30,9 +30,11 @@ class CohortFunnel(object):
 
             {set_user_values}
 
-            this.actions.forEach(function(z){{
-                {set_action_values}                       
-            }});
+            if(this.actions){{
+                this.actions.forEach(function(z){{
+                    {set_action_values}                       
+                }});
+            }}
             
             {set_bucket_values}
 
