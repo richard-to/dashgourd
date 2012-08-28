@@ -74,7 +74,8 @@ class CohortFunnel(object):
         self.accepted_conditions = {
             'at_least': '>=',
             'at_most': '<=',
-            'exactly': '=='
+            'exactly': '==',
+            'if': None
         }
 
     def run(self, db, collection, options):
@@ -196,17 +197,15 @@ class CohortFunnel(object):
             if 'n' not in data:
                 data['n'] = 'total'
 
-            if data['calc'] == 'pct': 
+            cond = {'type': 'sum', 'value': 1}
+            if type(data.get('cond')) is dict:
+                if data['cond'].get('type') in self.accepted_conditions:
+                    cond['type'] = data['cond']['type']
+                    
+                if  data['cond'].get('value') is not None:
+                    cond['value'] = data['cond']['value']
 
-                cond = {'type': 'sum', 'value': 1}
-                if type(data.get('cond')) is dict:
-                    if data['cond'].get('type') in self.accepted_conditions:
-                        cond['type'] = data['cond']['type']
-                        
-                    if  data['cond'].get('value') is not None:
-                        cond['value'] = data['cond']['value']
-
-                data['cond'] = cond
+            data['cond'] = cond
 
             if 'name' not in data:
                 
@@ -226,6 +225,8 @@ class CohortFunnel(object):
                     label = data['value'].replace(' ', '_').lower()
                     data['name'] = "{}_{}".format(data['name'], label)
 
+                if data['cond']['type'] == 'if':
+                    data['name'] = "{}_if_{}".format(data['name'], data['cond']['value'])
             validated_calc.append(data)
         
         return validated_calc
@@ -276,6 +277,11 @@ class CohortFunnel(object):
                 cond_code = ("values.{n}.value = (values.{n}.value {op} {v}) ? 1 : 0; ").format(
                     n=data['name'], op=op, v=data['cond']['value'])
                 adjust_cond_values.append(cond_code)
+            elif data['cond']['type'] == 'if':
+                cond_code = ("values.{n}.value = "
+                    "(values.{n}.value > 0 && values.{if_cond}.value > 0) "
+                    "? values.{n}.value : 0; ").format(n=data['name'], if_cond=data['cond']['value'])
+                adjust_cond_values.append(cond_code)  
         return adjust_cond_values
 
     def build_set_range_bucket_values(self, calc, init_values=[], set_bucket_values=[]):

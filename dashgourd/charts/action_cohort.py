@@ -157,7 +157,7 @@ class ActionCohort(CohortFunnel):
         for data in calc:
             if data['type'] == 'action':
                 if 'meta' in data:
-                    code = "if(z.{m} != undefined){{ values[z{p}].{n}.value += z.{m}; }}".format(
+                    code = "if(z.{m} != undefined){{ values[z.{p}].{n}.value += z.{m}; }}".format(
                         p=pivot, m=data['meta'], n=data['name'])
                 elif 'meta' in data and 'value' in data:
                     code = "if(z.{m} != undefined && z.{m} == '{v}'){{ values[z.{p}].{n}.value++; }}".format(
