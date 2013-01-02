@@ -248,12 +248,12 @@ class CohortFunnel(object):
     def build_set_action_values(self, calc, set_action_values={}):
         for data in calc:
             if data['type'] == 'action':
-                if 'meta' in data:
-                    code = "if(z.{m} != undefined){{ values.{n}.value += z.{m}; }}".format(
-                        m=data['meta'], n=data['name'])
-                elif 'meta' in data and 'value' in data:
+                if 'meta' in data and 'value' in data:
                     code = "if(z.{m} != undefined && z.{m} == '{v}'){{ values.{n}.value++; }}".format(
                         m=data['meta'], n=data['name'], v=data['value'])
+                elif 'meta' in data:
+                    code = "if(z.{m} != undefined){{ values.{n}.value += z.{m}; }}".format(
+                        m=data['meta'], n=data['name'])                
                 else:
                     code = "values.{}.value++;".format(data['name'])
         
