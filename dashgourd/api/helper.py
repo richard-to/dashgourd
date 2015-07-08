@@ -1,5 +1,5 @@
-from pymongo import Connection
+from pymongo import MongoClient
 
 def init_mongodb(mongo_uri, mongo_dbname):
-    conn = Connection(mongo_uri)
+    conn = MongoClient(mongo_uri)
     return conn[mongo_dbname]
